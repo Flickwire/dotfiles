@@ -1,25 +1,15 @@
+#!/bin/bash
+
 echo 'Installing starship...'
-if command -v starship &> /dev/null; then
-    echo "Starship is already installed."
-else
-    curl -sS https://starship.rs/install.sh | sh
-    echo "Starship has been installed."
-fi
+curl -sS https://starship.rs/install.sh | sh
 echo 'Configuring starship...'
 mkdir -p ~/.config
 mkdir -p ~/.config/starship
 cp -r ./starship.toml ~/.config/starship/starship.toml
-echo 'Starship configuration has been set up.'
 echo 'Configuring zsh...'
-cp -r ./zshrc ~/.zshrc
-echo 'Zsh configuration has been set up.'
+cp -r ./.zshrc ~/.zshrc
 echo 'Installing zplug...'
-if [ ! -d "$HOME/.zplug" ]; then
-    curl -sL zplug.sh/installer | zsh
-    echo 'Zplug has been installed.'
-else
-    echo 'Zplug is already installed.'
-fi
+curl -sL zplug.sh/installer | zsh
 echo 'Installing zsh plugins...'
 zsh_plugins=(
     "zsh-users/zsh-autosuggestions"
@@ -27,10 +17,5 @@ zsh_plugins=(
     "zsh-users/zsh-history-substring-search"
 )
 for plugin in "${zsh_plugins[@]}"; do
-    if zplug check "$plugin"; then
-        echo "$plugin is already installed."
-    else
-        echo "Installing $plugin..."
-        zplug install "$plugin"
-    fi
+    zplug install "$plugin"
 done
