@@ -44,6 +44,7 @@ zplug load
 bindkey "$terminfo[kcuu1]" history-substring-search-up
 bindkey "$terminfo[kcud1]" history-substring-search-down
 
-export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '{print $2; exit;}'):0.0
-sudo /etc/init.d/dbus start &> /dev/null
 
+
+# Created by `pipx` on 2025-06-09 12:55:38
+export PATH="$PATH:/home/skye/.local/bin"
