@@ -20,10 +20,10 @@ setup_amazon_linux_2023() {
     echo "Running Amazon Linux 2023 setup..."
     sudo dnf update -y
     # Example: install dev tools
-    sudo dnf install -y git htop zsh curl tmux
-    sudo dnf install dnf5-plugins
-    sudo dnf config-manager addrepo --from-repofile=https://cli.github.com/packages/rpm/gh-cli.repo
-    sudo dnf install gh
+    sudo dnf install -y --allowerasing git htop zsh curl tmux
+    sudo dnf install -y --allowerasing 'dnf-command(config-manager)'
+    sudo dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+    sudo dnf install -y --allowerasing gh
 }
 
 # Function for Amazon Linux 2 setup
@@ -80,14 +80,16 @@ esac
 
 echo 'Installing starship...'
 curl -sS https://starship.rs/install.sh > starship.sh
-sh starship.sh --yes
+sh starship.sh --yes > /dev/null
 echo 'Configuring starship...'
 mkdir -p ~/.config
 cp -r ./starship.toml ~/.config/starship.toml
 echo 'Configuring zsh...'
 cp -r ./.zshrc ~/.zshrc
 echo 'Installing zplug...'
-curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/installer/master/installer.zsh | zsh
+if [ ! -d "$HOME/.zplug" ]; then
+    curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/installer/master/installer.zsh | zsh
+fi
 echo 'Installing vimplug...'
 curl -fLo ~/.vim/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 cp -r ./.vimrc ~/.vimrc
