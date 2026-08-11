@@ -57,24 +57,26 @@ chsh -s "$(command -v zsh)"
 
 ## EC2 User Data
 
-`scripts/ec2-user-data-amazon-linux-2.sh` bootstraps these dotfiles for the
-`ssm-user` account on Amazon Linux 2. Supply it when launching an instance:
+The scripts under `scripts/` bootstrap these dotfiles for the `ssm-user`
+account on Amazon Linux 2 or Amazon Linux 2023. Supply the matching script when
+launching an instance:
 
 ```bash
 aws ec2 run-instances \
   --image-id ami-xxxxxxxxxxxxxxxxx \
   --instance-type t3.micro \
   --iam-instance-profile Name=your-ssm-instance-profile \
-  --user-data file://scripts/ec2-user-data-amazon-linux-2.sh
+  --user-data file://scripts/ec2-user-data-amazon-linux-2023.sh
 ```
 
-The script creates `ssm-user` when the SSM Agent has not created it yet, grants
+Each script creates `ssm-user` when the SSM Agent has not created it yet, grants
 the passwordless sudo access expected by Session Manager, installs from a
 checkout at `~ssm-user/.local/src/dotfiles`, and selects Zsh as the login shell.
 It is safe to run again. `DOTFILES_REPOSITORY` and `DOTFILES_REF` may be set to
 use a fork or pinned commit; pin `DOTFILES_REF` for reproducible launches.
 Node.js is omitted because current releases do not support Amazon Linux 2's
-older glibc.
+older glibc. Amazon Linux 2023 installs the complete pinned toolset, including
+Node.js.
 
 ## Pinned Dependencies
 
