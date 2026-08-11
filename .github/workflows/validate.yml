@@ -50,7 +50,7 @@ jobs:
         run: |
           export PATH="$HOME/.local/bin:$HOME/.asdf/shims:$PATH"
           test "$(asdf version | awk '{print $1}')" = "v0.20.0"
-          test "$(uv --version)" = "uv 0.12.3"
+          test "$(uv --version | awk '{print $2}')" = "0.12.3"
           test "$(node --version)" = "v24.19.0"
           test "$(python --version)" = "Python 3.14.7"
           [[ "$(aws --version)" == aws-cli/2.36.20* ]]
