@@ -20,8 +20,8 @@ jobs:
           sudo apt-get install -y shellcheck zsh
       - name: Validate shell files
         run: |
-          shellcheck install.sh
-          bash -n install.sh
+          shellcheck install.sh scripts/*.sh
+          bash -n install.sh scripts/*.sh
           zsh -n .zshrc
       - name: Exercise supported OS dispatch
         run: |

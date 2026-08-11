@@ -154,7 +154,7 @@ install_macos_packages() {
 }
 
 install_system_packages() {
-    local command_name required=(curl git gpg groff less tmux unzip vim zsh)
+    local command_name required=(curl git gpg groff less tar tmux unzip vim zsh)
     local missing=()
 
     case "$OS_ID" in
@@ -309,7 +309,14 @@ install_asdf_tools() {
     local pids=() tool version
     while read -r tool version; do
         [[ -z "$tool" || "$tool" == \#* ]] && continue
-        "$HOME/.local/bin/asdf" install "$tool" "$version" & pids+=("$!")
+        if [[ "$OS_ID" == "amzn" && "$OS_VERSION_ID" == "2" && "$tool" == "nodejs" ]]; then
+            printf 'Skipping Node.js %s: Amazon Linux 2 glibc is unsupported.\n' "$version"
+            continue
+        fi
+        (
+            cd "$HOME"
+            "$HOME/.local/bin/asdf" install "$tool" "$version"
+        ) & pids+=("$!")
     done <"$REPO_DIR/.tool-versions"
     wait_for_jobs "${pids[@]}"
     "$HOME/.local/bin/asdf" reshim

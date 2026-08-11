@@ -13,6 +13,8 @@ command-line tools without upgrading the entire operating system.
 
 The installer supports x86-64 and ARM64. Other operating systems and
 architectures fail explicitly rather than attempting a partial installation.
+Node.js 24 is skipped on Amazon Linux 2 because its glibc 2.26 is older than
+the glibc 2.28 required by official Node.js binaries.
 
 ## Install
 
@@ -53,6 +55,27 @@ To make Zsh the login shell after installation:
 chsh -s "$(command -v zsh)"
 ```
 
+## EC2 User Data
+
+`scripts/ec2-user-data-amazon-linux-2.sh` bootstraps these dotfiles for the
+`ssm-user` account on Amazon Linux 2. Supply it when launching an instance:
+
+```bash
+aws ec2 run-instances \
+  --image-id ami-xxxxxxxxxxxxxxxxx \
+  --instance-type t3.micro \
+  --iam-instance-profile Name=your-ssm-instance-profile \
+  --user-data file://scripts/ec2-user-data-amazon-linux-2.sh
+```
+
+The script creates `ssm-user` when the SSM Agent has not created it yet, grants
+the passwordless sudo access expected by Session Manager, installs from a
+checkout at `~ssm-user/.local/src/dotfiles`, and selects Zsh as the login shell.
+It is safe to run again. `DOTFILES_REPOSITORY` and `DOTFILES_REF` may be set to
+use a fork or pinned commit; pin `DOTFILES_REF` for reproducible launches.
+Node.js is omitted because current releases do not support Amazon Linux 2's
+older glibc.
+
 ## Pinned Dependencies
 
 The asdf binary is pinned to a release and verified with SHA-256. asdf plugins,
@@ -70,8 +93,8 @@ zplug is no longer used. Existing installations may remove `$HOME/.zplug` and
 Run the same validation used by CI:
 
 ```bash
-shellcheck install.sh
-bash -n install.sh
+shellcheck install.sh scripts/*.sh
+bash -n install.sh scripts/*.sh
 zsh -n .zshrc
 DOTFILES_DRY_RUN=1 DOTFILES_OS_ID=ubuntu DOTFILES_OS_VERSION_ID=24.04 ./install.sh
 STARSHIP_CONFIG="$PWD/starship.toml" starship prompt --path "$PWD" >/dev/null
