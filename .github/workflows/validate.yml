@@ -1,0 +1,52 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck zsh
+      - name: Validate shell files
+        run: |
+          shellcheck install.sh
+          bash -n install.sh
+          zsh -n .zshrc .zsh_plugins
+      - name: Exercise supported OS dispatch
+        run: |
+          while read -r id version; do
+            DOTFILES_DRY_RUN=1 DOTFILES_OS_ID="$id" DOTFILES_OS_VERSION_ID="$version" ./install.sh
+          done <<'EOF'
+          ubuntu 24.04
+          debian 13
+          amzn 2
+          amzn 2023
+          fedora 42
+          rhel 9
+          macos 15
+          EOF
+
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Run installer twice
+        run: |
+          ./install.sh
+          ./install.sh
+      - name: Validate installed configuration
+        run: |
+          STARSHIP_CONFIG="$HOME/.config/starship.toml" "$HOME/.local/bin/starship" prompt --path "$PWD" >/dev/null
+          zsh -ic exit

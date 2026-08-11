@@ -1,50 +1,39 @@
-# Lines configured by zsh-newuser-install
-HISTFILE=~/.histfile
-HISTSIZE=1000
-SAVEHIST=1000
+HISTFILE="$HOME/.histfile"
+HISTSIZE=10000
+SAVEHIST=10000
+
+setopt append_history
+setopt hist_ignore_dups
+setopt share_history
 bindkey -e
-# End of lines configured by zsh-newuser-install
-# The following lines were added by compinstall
-zstyle :compinstall filename '/home/skye/.zshrc'
-setopt rcquotes
-# End of lines added by compinstall
 
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+[[ -s "$NVM_DIR/nvm.sh" ]] && source "$NVM_DIR/nvm.sh"
+[[ -s "$NVM_DIR/bash_completion" ]] && source "$NVM_DIR/bash_completion"
 
-eval "$(starship init zsh)"
+export PNPM_HOME="$HOME/.local/share/pnpm"
+path=("$HOME/.local/bin" "$PNPM_HOME" $path)
+typeset -U path PATH
 
-
-# pnpm
-export PNPM_HOME="/home/skye/.local/share/pnpm"
-case ":$PATH:" in
-  *":$PNPM_HOME:"*) ;;
-  *) export PATH="$PNPM_HOME:$PATH" ;;
-esac
-# pnpm end
-
-alias git-cleanup='git remote prune origin && git fetch -p && for branch in $(git for-each-ref --format ''%(refname) %(upstream:track)'' refs/heads | awk ''$2 == "[gone]" {sub("refs/heads/", "", $1); print $1}''); do git branch -D $branch; done'
-
-source ~/.zplug/init.zsh
-
-zplug "zsh-users/zsh-autosuggestions"
-zplug "zsh-users/zsh-syntax-highlighting"
-zplug "zsh-users/zsh-history-substring-search"
-
-if ! zplug check --verbose; then
-    printf "Install? [y/N]: "
-    if read -q; then
-        echo; zplug install
-    fi
+if command -v starship >/dev/null; then
+    eval "$(starship init zsh)"
 fi
 
-zplug load
+git-cleanup() {
+    local branch tracking
+    git remote prune origin
+    git fetch --prune
+    git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads |
+        while read -r branch tracking; do
+            [[ "$tracking" == "[gone]" ]] && git branch -d -- "$branch"
+        done
+}
 
-bindkey "$terminfo[kcuu1]" history-substring-search-up
-bindkey "$terminfo[kcud1]" history-substring-search-down
+if [[ -r "$HOME/.zplug/init.zsh" ]]; then
+    source "$HOME/.zplug/init.zsh"
+    [[ -r "$HOME/.zsh_plugins" ]] && source "$HOME/.zsh_plugins"
+    zplug load
+fi
 
-
-
-# Created by `pipx` on 2025-06-09 12:55:38
-export PATH="$PATH:/home/skye/.local/bin"
+[[ -n "${terminfo[kcuu1]-}" ]] && bindkey "$terminfo[kcuu1]" history-substring-search-up
+[[ -n "${terminfo[kcud1]-}" ]] && bindkey "$terminfo[kcud1]" history-substring-search-down
