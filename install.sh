@@ -10,7 +10,10 @@ readonly ASDF_UV_COMMIT="1d44a50b8006921f3cb55b4e4d14b1d90472b201"
 readonly ASDF_AWSCLI_COMMIT="8489e240cead79912147087f9a3f0ea8ef69616e"
 readonly ASDF_GITHUB_CLI_COMMIT="e0605b704ef3829e10a9353b91b4c0bafa5e5582"
 readonly ASDF_STARSHIP_COMMIT="56045ec8c5ed34a3da4613b03de9b38c7aa07732"
-readonly ZPLUG_COMMIT="8f14b4850d8e410f00db92afcd87b88c0c90f771"
+readonly ASDF_TERRAFORM_COMMIT="d2557f97752761eecb50f63cd31b64c236d23089"
+readonly ZSH_AUTOSUGGESTIONS_COMMIT="85919cd1ffa7d2d5412f6d3fe437ebdbeeec4fc5"
+readonly ZSH_SYNTAX_HIGHLIGHTING_COMMIT="c4d95591843d49838b7ad30081e7aba3135a6703"
+readonly ZSH_HISTORY_SEARCH_COMMIT="14c8d2e0ffaee98f2df9850b19944f32546fdea5"
 readonly VIM_PLUG_COMMIT="88e31471818e9a29a8a20a0ee61360cfd7bdc1cd"
 readonly VIM_PLUG_SHA256="7e2b20cd909da9c456498684c98f03c63829170f01e34595dd8e1818a217d37c"
 readonly UV_VERSION="0.12.3"
@@ -31,13 +34,6 @@ cleanup() {
 trap cleanup EXIT
 
 SUDO=()
-if ((EUID != 0)); then
-    if ! command -v sudo >/dev/null; then
-        printf 'Error: sudo is required to install system packages.\n' >&2
-        exit 1
-    fi
-    SUDO=(sudo)
-fi
 
 run() {
     if [[ "$DRY_RUN" == "1" ]]; then
@@ -47,6 +43,18 @@ run() {
         return
     fi
     "$@"
+}
+
+ensure_sudo() {
+    if ((EUID == 0)); then
+        return
+    fi
+    if [[ "$DRY_RUN" == "1" ]] || command -v sudo >/dev/null; then
+        SUDO=(sudo)
+        return
+    fi
+    printf 'Error: sudo is required to install missing system packages.\n' >&2
+    exit 1
 }
 
 download() {
@@ -78,16 +86,48 @@ detect_os() {
     OS_VERSION_ID="${VERSION_ID:-}"
 }
 
+map_packages() {
+    local family="$1" tool
+    shift
+    PACKAGES=()
+    for tool in "$@"; do
+        case "$family:$tool" in
+            apt:groff)
+                PACKAGES+=(groff-base)
+                ;;
+            apt:gpg)
+                PACKAGES+=(gnupg)
+                ;;
+            rpm:groff)
+                PACKAGES+=(groff-base)
+                ;;
+            rpm:gpg)
+                PACKAGES+=(gnupg2)
+                ;;
+            rpm:vim)
+                PACKAGES+=(vim-enhanced)
+                ;;
+            brew:gpg)
+                PACKAGES+=(gnupg)
+                ;;
+            *)
+                PACKAGES+=("$tool")
+                ;;
+        esac
+    done
+}
+
 install_apt_packages() {
+    map_packages apt "$@"
     run "${SUDO[@]}" apt-get update
     run "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive \
-        apt-get install -y curl git groff-base htop less tmux unzip vim zsh
+        apt-get install -y "${PACKAGES[@]}"
 }
 
 install_amazon_packages() {
+    map_packages rpm "$@"
     if [[ "$OS_VERSION_ID" == "2" ]]; then
-        run "${SUDO[@]}" yum install -y curl git groff-base htop less tmux unzip \
-            vim-enhanced zsh
+        run "${SUDO[@]}" yum install -y "${PACKAGES[@]}"
         return
     fi
 
@@ -96,16 +136,12 @@ install_amazon_packages() {
         exit 1
     fi
 
-    run "${SUDO[@]}" dnf install -y --allowerasing curl git groff-base htop less \
-        tmux unzip vim-enhanced zsh
+    run "${SUDO[@]}" dnf install -y --allowerasing "${PACKAGES[@]}"
 }
 
 install_dnf_packages() {
-    local packages=(curl git groff-base less tmux unzip vim-enhanced zsh)
-    if [[ "$OS_ID" == "fedora" ]]; then
-        packages+=(htop)
-    fi
-    run "${SUDO[@]}" dnf install -y "${packages[@]}"
+    map_packages rpm "$@"
+    run "${SUDO[@]}" dnf install -y "${PACKAGES[@]}"
 }
 
 install_macos_packages() {
@@ -113,42 +149,53 @@ install_macos_packages() {
         printf 'Error: Homebrew is required on macOS: https://brew.sh\n' >&2
         exit 1
     fi
-    run brew install bash coreutils curl git htop tmux unzip vim zsh
+    map_packages brew "$@"
+    run brew install "${PACKAGES[@]}"
 }
 
 install_system_packages() {
-    local command_name missing=0 required=(curl git tmux unzip vim zsh)
+    local command_name required=(curl git gpg groff less tmux unzip vim zsh)
+    local missing=()
+
+    case "$OS_ID" in
+        ubuntu | debian | amzn | fedora | rhel | macos) ;;
+        *)
+            printf 'Error: unsupported operating system: %s %s\n' "$OS_ID" "$OS_VERSION_ID" >&2
+            exit 1
+            ;;
+    esac
+
     if [[ "$OS_ID" != "rhel" ]]; then
         required+=(htop)
     fi
-    if [[ "$DRY_RUN" != "1" ]]; then
+    if [[ "$DRY_RUN" == "1" ]]; then
+        missing=("${required[@]}")
+    else
         for command_name in "${required[@]}"; do
             if ! command -v "$command_name" >/dev/null; then
-                missing=1
-                break
+                missing+=("$command_name")
             fi
         done
-        if ((missing == 0)) && [[ -x "$HOME/.local/bin/python${PYTHON_VERSION%.*}" ]]; then
-            return
-        fi
+    fi
+    if ((${#missing[@]} == 0)); then
+        return
     fi
 
     case "$OS_ID" in
         ubuntu | debian)
-            install_apt_packages
+            ensure_sudo
+            install_apt_packages "${missing[@]}"
             ;;
         amzn)
-            install_amazon_packages
+            ensure_sudo
+            install_amazon_packages "${missing[@]}"
             ;;
         fedora | rhel)
-            install_dnf_packages
+            ensure_sudo
+            install_dnf_packages "${missing[@]}"
             ;;
         macos)
-            install_macos_packages
-            ;;
-        *)
-            printf 'Error: unsupported operating system: %s %s\n' "$OS_ID" "$OS_VERSION_ID" >&2
-            exit 1
+            install_macos_packages "${missing[@]}"
             ;;
     esac
 }
@@ -215,38 +262,56 @@ install_asdf_plugin() {
     local commit="$3" name="$1" plugin_dir url="$2"
     plugin_dir="$HOME/.asdf/plugins/$name"
 
-    if [[ ! -d "$plugin_dir/.git" ]]; then
-        if [[ -e "$plugin_dir" ]]; then
-            printf 'Error: %s exists but is not an asdf plugin checkout.\n' "$plugin_dir" >&2
+    install_git_checkout "$plugin_dir" "$url" "$commit" bin/install
+}
+
+install_git_checkout() {
+    local checkout_dir="$1" commit="$3" required_file="$4" url="$2"
+
+    if [[ ! -d "$checkout_dir/.git" ]]; then
+        if [[ -e "$checkout_dir" ]]; then
+            printf 'Error: %s exists but is not a Git checkout.\n' "$checkout_dir" >&2
             exit 1
         fi
-        mkdir -p "$HOME/.asdf/plugins"
-        git clone --filter=blob:none --no-checkout "$url" "$plugin_dir"
+        mkdir -p "$(dirname -- "$checkout_dir")"
+        git clone --filter=blob:none --no-checkout "$url" "$checkout_dir"
     fi
 
-    if [[ "$(git -C "$plugin_dir" rev-parse HEAD 2>/dev/null || true)" == "$commit" ]] &&
-        [[ -x "$plugin_dir/bin/install" ]]; then
+    if [[ "$(git -C "$checkout_dir" rev-parse HEAD 2>/dev/null || true)" == "$commit" ]] &&
+        [[ -r "$checkout_dir/$required_file" ]]; then
         return
     fi
 
-    git -C "$plugin_dir" fetch --depth 1 origin "$commit"
-    git -C "$plugin_dir" checkout --detach "$commit"
+    git -C "$checkout_dir" fetch --depth 1 origin "$commit"
+    git -C "$checkout_dir" checkout --detach "$commit"
+}
+
+wait_for_jobs() {
+    local pid status=0
+    for pid in "$@"; do
+        wait "$pid" || status=1
+    done
+    return "$status"
 }
 
 install_asdf_plugins() {
-    install_asdf_plugin nodejs https://github.com/asdf-vm/asdf-nodejs.git "$ASDF_NODEJS_COMMIT"
-    install_asdf_plugin uv https://github.com/asdf-community/asdf-uv.git "$ASDF_UV_COMMIT"
-    install_asdf_plugin awscli https://github.com/MetricMike/asdf-awscli.git "$ASDF_AWSCLI_COMMIT"
-    install_asdf_plugin github-cli https://github.com/bartlomiejdanek/asdf-github-cli.git "$ASDF_GITHUB_CLI_COMMIT"
-    install_asdf_plugin starship https://github.com/gr1m0h/asdf-starship.git "$ASDF_STARSHIP_COMMIT"
+    local pids=()
+    install_asdf_plugin nodejs https://github.com/asdf-vm/asdf-nodejs.git "$ASDF_NODEJS_COMMIT" & pids+=("$!")
+    install_asdf_plugin uv https://github.com/asdf-community/asdf-uv.git "$ASDF_UV_COMMIT" & pids+=("$!")
+    install_asdf_plugin awscli https://github.com/MetricMike/asdf-awscli.git "$ASDF_AWSCLI_COMMIT" & pids+=("$!")
+    install_asdf_plugin github-cli https://github.com/bartlomiejdanek/asdf-github-cli.git "$ASDF_GITHUB_CLI_COMMIT" & pids+=("$!")
+    install_asdf_plugin starship https://github.com/gr1m0h/asdf-starship.git "$ASDF_STARSHIP_COMMIT" & pids+=("$!")
+    install_asdf_plugin terraform https://github.com/asdf-community/asdf-hashicorp.git "$ASDF_TERRAFORM_COMMIT" & pids+=("$!")
+    wait_for_jobs "${pids[@]}"
 }
 
 install_asdf_tools() {
-    local tool version
+    local pids=() tool version
     while read -r tool version; do
         [[ -z "$tool" || "$tool" == \#* ]] && continue
-        "$HOME/.local/bin/asdf" install "$tool" "$version"
+        "$HOME/.local/bin/asdf" install "$tool" "$version" & pids+=("$!")
     done <"$REPO_DIR/.tool-versions"
+    wait_for_jobs "${pids[@]}"
     "$HOME/.local/bin/asdf" reshim
 
     ASDF_UV_VERSION="$UV_VERSION" "$HOME/.asdf/shims/uv" \
@@ -256,21 +321,15 @@ install_asdf_tools() {
     "$HOME/.local/bin/asdf" completion zsh >"$HOME/.asdf/completions/_asdf"
 }
 
-install_zplug() {
-    if [[ ! -d "$HOME/.zplug/.git" ]]; then
-        if [[ -e "$HOME/.zplug" ]]; then
-            printf 'Error: %s exists but is not a zplug Git checkout.\n' "$HOME/.zplug" >&2
-            exit 1
-        fi
-        git clone --filter=blob:none https://github.com/zplug/zplug.git "$HOME/.zplug"
-    fi
-
-    if [[ "$(git -C "$HOME/.zplug" rev-parse HEAD)" == "$ZPLUG_COMMIT" ]]; then
-        return
-    fi
-
-    git -C "$HOME/.zplug" fetch --depth 1 origin "$ZPLUG_COMMIT"
-    git -C "$HOME/.zplug" checkout --detach "$ZPLUG_COMMIT"
+install_zsh_plugins() {
+    local plugin_root="$HOME/.local/share/zsh/plugins" pids=()
+    install_git_checkout "$plugin_root/autosuggestions" https://github.com/zsh-users/zsh-autosuggestions.git \
+        "$ZSH_AUTOSUGGESTIONS_COMMIT" zsh-autosuggestions.zsh & pids+=("$!")
+    install_git_checkout "$plugin_root/syntax-highlighting" https://github.com/zsh-users/zsh-syntax-highlighting.git \
+        "$ZSH_SYNTAX_HIGHLIGHTING_COMMIT" zsh-syntax-highlighting.zsh & pids+=("$!")
+    install_git_checkout "$plugin_root/history-substring-search" https://github.com/zsh-users/zsh-history-substring-search.git \
+        "$ZSH_HISTORY_SEARCH_COMMIT" zsh-history-substring-search.zsh & pids+=("$!")
+    wait_for_jobs "${pids[@]}"
 }
 
 install_vim_plug() {
@@ -297,17 +356,12 @@ install_config() {
     done <<EOF
 $REPO_DIR/starship.toml|$HOME/.config/starship.toml
 $REPO_DIR/.zshrc|$HOME/.zshrc
-$REPO_DIR/.zsh_plugins|$HOME/.zsh_plugins
 $REPO_DIR/.vimrc|$HOME/.vimrc
 $REPO_DIR/.tool-versions|$HOME/.tool-versions
 EOF
 }
 
 install_plugins() {
-    # HOME must expand inside the clean zsh process rather than in this shell.
-    # shellcheck disable=SC2016
-    env TERM="${TERM:-xterm-256color}" LANG="${LANG:-C.UTF-8}" LC_ALL="${LC_ALL:-C.UTF-8}" \
-        zsh -c 'source "$HOME/.zplug/init.zsh"; source "$HOME/.zsh_plugins"; if ! zplug check; then zplug install || true; zplug check; fi'
     vim -Nu "$HOME/.vimrc" -i NONE -es -c 'PlugInstall --sync' -c 'qa!'
 }
 
@@ -321,7 +375,7 @@ fi
 
 install_asdf
 install_asdf_plugins
-install_zplug
+install_zsh_plugins
 install_vim_plug
 install_config
 install_asdf_tools

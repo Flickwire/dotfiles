@@ -22,7 +22,7 @@ jobs:
         run: |
           shellcheck install.sh
           bash -n install.sh
-          zsh -n .zshrc .zsh_plugins
+          zsh -n .zshrc
       - name: Exercise supported OS dispatch
         run: |
           while read -r id version; do
@@ -56,5 +56,6 @@ jobs:
           [[ "$(aws --version)" == aws-cli/2.36.20* ]]
           test "$(gh version --json version --jq .version)" = "2.97.0"
           test "$(starship --version | awk 'NR == 1 {print $2}')" = "1.26.0"
+          test "$(terraform version -json | jq -r .terraform_version)" = "1.15.8"
           STARSHIP_CONFIG="$HOME/.config/starship.toml" starship prompt --path "$PWD" >/dev/null
           zsh -ic exit

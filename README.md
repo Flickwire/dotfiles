@@ -38,10 +38,12 @@ asdf manages the user-facing development tools pinned in `.tool-versions`:
 - AWS CLI 2.36.20
 - GitHub CLI 2.97.0
 - Starship 1.26.0
+- Terraform 1.15.8
 
 uv installs a prebuilt Python 3.14.7, the latest stable release; Python does not
 designate LTS releases. This avoids compiling CPython during bootstrap. The OS
-package manager is limited to bootstrap utilities and shell/editor tools. asdf
+package manager installs only missing bootstrap utilities and shell/editor
+tools. Independent asdf plugin and tool downloads run concurrently. asdf
 installs its tools under `$HOME/.asdf` and exposes them through
 `$HOME/.asdf/shims`.
 
@@ -61,10 +63,13 @@ than inside the container.
 ## Pinned Dependencies
 
 The asdf binary is pinned to a release and verified with SHA-256. asdf plugins,
-zplug, vim-plug, Zsh plugins, and Vim plugins are pinned to commits or tags.
-Tool versions live in `.tool-versions`; uv's prebuilt Python distributions are
-also checksummed. Update the corresponding constants, checksums, and tool
+vim-plug, directly sourced Zsh plugins, and Vim plugins are pinned to commits or
+tags. Tool versions live in `.tool-versions`; uv's prebuilt Python distributions
+are also checksummed. Update the corresponding constants, checksums, and tool
 versions deliberately when upgrading them.
+
+zplug is no longer used. Existing installations may remove `$HOME/.zplug` and
+`$HOME/.zsh_plugins` after upgrading.
 
 ## Development
 
@@ -73,7 +78,7 @@ Run the same validation used by CI:
 ```bash
 shellcheck install.sh
 bash -n install.sh
-zsh -n .zshrc .zsh_plugins
+zsh -n .zshrc
 DOTFILES_DRY_RUN=1 DOTFILES_OS_ID=ubuntu DOTFILES_OS_VERSION_ID=24.04 ./install.sh
 STARSHIP_CONFIG="$PWD/starship.toml" starship prompt --path "$PWD" >/dev/null
 asdf current
@@ -87,9 +92,10 @@ machine. `DOTFILES_OS_ID` and `DOTFILES_OS_VERSION_ID` are test overrides.
 Remove the installed files and restore any desired timestamped backups:
 
 ```bash
-rm -rf "$HOME/.asdf" "$HOME/.local/share/uv" "$HOME/.zplug" "$HOME/.vim/plugged"
+rm -rf "$HOME/.asdf" "$HOME/.local/share/uv" "$HOME/.local/share/zsh/plugins"
+rm -rf "$HOME/.vim/plugged"
 rm -f "$HOME/.local/bin/asdf" "$HOME/.local/bin/python" "$HOME/.local/bin/python3"
-rm -f "$HOME/.local/bin/python3.14" "$HOME/.vim/autoload/plug.vim" "$HOME/.zsh_plugins"
+rm -f "$HOME/.local/bin/python3.14" "$HOME/.vim/autoload/plug.vim"
 rm -f "$HOME/.config/starship.toml" "$HOME/.zshrc" "$HOME/.vimrc"
 rm -f "$HOME/.tool-versions"
 ```
