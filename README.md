@@ -53,13 +53,6 @@ To make Zsh the login shell after installation:
 chsh -s "$(command -v zsh)"
 ```
 
-## Prompt Font
-
-The Starship prompt uses Nerd Font and Powerline glyphs. Select a
-[Nerd Font](https://www.nerdfonts.com/) in the local terminal to render every
-symbol correctly. Codespaces controls the terminal font in the client rather
-than inside the container.
-
 ## Pinned Dependencies
 
 The asdf binary is pinned to a release and verified with SHA-256. asdf plugins,
