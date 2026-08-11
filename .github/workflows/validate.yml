@@ -54,8 +54,13 @@ jobs:
           test "$(node --version)" = "v24.19.0"
           test "$(python --version)" = "Python 3.14.7"
           [[ "$(aws --version)" == aws-cli/2.36.20* ]]
-          test "$(gh version --json version --jq .version)" = "2.97.0"
+          test "$(gh --version | awk 'NR == 1 {print $3}')" = "2.97.0"
           test "$(starship --version | awk 'NR == 1 {print $2}')" = "1.26.0"
-          test "$(terraform version -json | jq -r .terraform_version)" = "1.15.8"
+          test "$(terraform version | awk 'NR == 1 {sub(/^v/, "", $2); print $2}')" = "1.15.8"
+          test -f "$HOME/.vim/pack/dotfiles/start/vim-airline/plugin/airline.vim"
+          test -f "$HOME/.vim/pack/dotfiles/start/vim-terraform/ftdetect/hcl.vim"
+          vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if !exists(":AirlineToggle") | cquit | endif' -c 'qa!'
+          touch /tmp/main.tf
+          vim -Nu "$HOME/.vimrc" -i NONE -es /tmp/main.tf -c 'if &filetype !=# "terraform" | cquit | endif' -c 'qa!'
           STARSHIP_CONFIG="$HOME/.config/starship.toml" starship prompt --path "$PWD" >/dev/null
           zsh -ic exit

@@ -63,13 +63,14 @@ than inside the container.
 ## Pinned Dependencies
 
 The asdf binary is pinned to a release and verified with SHA-256. asdf plugins,
-vim-plug, directly sourced Zsh plugins, and Vim plugins are pinned to commits or
+directly sourced Zsh plugins, and native Vim packages are pinned to commits or
 tags. Tool versions live in `.tool-versions`; uv's prebuilt Python distributions
 are also checksummed. Update the corresponding constants, checksums, and tool
 versions deliberately when upgrading them.
 
 zplug is no longer used. Existing installations may remove `$HOME/.zplug` and
-`$HOME/.zsh_plugins` after upgrading.
+`$HOME/.zsh_plugins` after upgrading. vim-plug is also no longer used, so
+`$HOME/.vim/autoload/plug.vim` and `$HOME/.vim/plugged` may be removed.
 
 ## Development
 
@@ -93,9 +94,9 @@ Remove the installed files and restore any desired timestamped backups:
 
 ```bash
 rm -rf "$HOME/.asdf" "$HOME/.local/share/uv" "$HOME/.local/share/zsh/plugins"
-rm -rf "$HOME/.vim/plugged"
+rm -rf "$HOME/.vim/pack/dotfiles"
 rm -f "$HOME/.local/bin/asdf" "$HOME/.local/bin/python" "$HOME/.local/bin/python3"
-rm -f "$HOME/.local/bin/python3.14" "$HOME/.vim/autoload/plug.vim"
+rm -f "$HOME/.local/bin/python3.14"
 rm -f "$HOME/.config/starship.toml" "$HOME/.zshrc" "$HOME/.vimrc"
 rm -f "$HOME/.tool-versions"
 ```

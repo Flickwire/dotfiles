@@ -14,8 +14,8 @@ readonly ASDF_TERRAFORM_COMMIT="d2557f97752761eecb50f63cd31b64c236d23089"
 readonly ZSH_AUTOSUGGESTIONS_COMMIT="85919cd1ffa7d2d5412f6d3fe437ebdbeeec4fc5"
 readonly ZSH_SYNTAX_HIGHLIGHTING_COMMIT="c4d95591843d49838b7ad30081e7aba3135a6703"
 readonly ZSH_HISTORY_SEARCH_COMMIT="14c8d2e0ffaee98f2df9850b19944f32546fdea5"
-readonly VIM_PLUG_COMMIT="88e31471818e9a29a8a20a0ee61360cfd7bdc1cd"
-readonly VIM_PLUG_SHA256="7e2b20cd909da9c456498684c98f03c63829170f01e34595dd8e1818a217d37c"
+readonly VIM_AIRLINE_COMMIT="a2fefe599378b4a493287d10501f51e224753690"
+readonly VIM_TERRAFORM_COMMIT="520498fab16a3a11f2ae1b8cb65e0a1684bc317a"
 readonly UV_VERSION="0.12.3"
 readonly PYTHON_VERSION="3.14.7"
 BACKUP_SUFFIX="$(date +%Y%m%d%H%M%S)"
@@ -332,15 +332,13 @@ install_zsh_plugins() {
     wait_for_jobs "${pids[@]}"
 }
 
-install_vim_plug() {
-    mkdir -p "$HOME/.vim/autoload"
-    if [[ -f "$HOME/.vim/autoload/plug.vim" ]] &&
-        verify_sha256 "$VIM_PLUG_SHA256" "$HOME/.vim/autoload/plug.vim"; then
-        return
-    fi
-    download --output "$HOME/.vim/autoload/plug.vim" \
-        "https://raw.githubusercontent.com/junegunn/vim-plug/${VIM_PLUG_COMMIT}/plug.vim"
-    verify_sha256 "$VIM_PLUG_SHA256" "$HOME/.vim/autoload/plug.vim"
+install_vim_plugins() {
+    local package_root="$HOME/.vim/pack/dotfiles/start" pids=()
+    install_git_checkout "$package_root/vim-airline" https://github.com/vim-airline/vim-airline.git \
+        "$VIM_AIRLINE_COMMIT" plugin/airline.vim & pids+=("$!")
+    install_git_checkout "$package_root/vim-terraform" https://github.com/hashivim/vim-terraform.git \
+        "$VIM_TERRAFORM_COMMIT" ftdetect/hcl.vim & pids+=("$!")
+    wait_for_jobs "${pids[@]}"
 }
 
 install_config() {
@@ -361,10 +359,6 @@ $REPO_DIR/.tool-versions|$HOME/.tool-versions
 EOF
 }
 
-install_plugins() {
-    vim -Nu "$HOME/.vimrc" -i NONE -es -c 'PlugInstall --sync' -c 'qa!'
-}
-
 detect_os
 printf 'Detected OS: %s %s\n' "$OS_ID" "$OS_VERSION_ID"
 install_system_packages
@@ -376,9 +370,8 @@ fi
 install_asdf
 install_asdf_plugins
 install_zsh_plugins
-install_vim_plug
+install_vim_plugins
 install_config
 install_asdf_tools
-install_plugins
 
 printf 'Dotfiles installed. Start zsh or run: chsh -s %q\n' "$(command -v zsh)"
