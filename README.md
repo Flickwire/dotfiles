@@ -7,7 +7,7 @@ command-line tools without upgrading the entire operating system.
 ## Supported Systems
 
 - Ubuntu and Debian
-- Amazon Linux 2 and 2023
+- Amazon Linux 2023 (recommended) and legacy Amazon Linux 2
 - Fedora and RHEL
 - macOS with [Homebrew](https://brew.sh) already installed
 
@@ -45,9 +45,10 @@ asdf manages the user-facing development tools pinned in `.tool-versions`:
 uv installs a prebuilt Python 3.14.7, the latest stable release; Python does not
 designate LTS releases. This avoids compiling CPython during bootstrap. The OS
 package manager installs only missing bootstrap utilities and shell/editor
-tools. Independent asdf plugin and tool downloads run concurrently. asdf
-installs its tools under `$HOME/.asdf` and exposes them through
-`$HOME/.asdf/shims`.
+tools. Independent plugin and tool downloads use two concurrent jobs by default
+to remain safe on small instances. Set `DOTFILES_INSTALL_JOBS` to a positive
+integer to change the limit. asdf installs its tools under `$HOME/.asdf` and
+exposes them through `$HOME/.asdf/shims`.
 
 To make Zsh the login shell after installation:
 
@@ -57,19 +58,19 @@ chsh -s "$(command -v zsh)"
 
 ## EC2 User Data
 
-The scripts under `scripts/` bootstrap these dotfiles for the `ssm-user`
-account on Amazon Linux 2 or Amazon Linux 2023. Supply the matching script when
-launching an instance:
+`scripts/ec2-user-data-amazon-linux.sh` detects Amazon Linux 2 or 2023 and
+bootstraps these dotfiles for the `ssm-user` account. Amazon Linux 2023 is
+recommended for new instances. Supply the script when launching an instance:
 
 ```bash
 aws ec2 run-instances \
   --image-id ami-xxxxxxxxxxxxxxxxx \
   --instance-type t3.micro \
   --iam-instance-profile Name=your-ssm-instance-profile \
-  --user-data file://scripts/ec2-user-data-amazon-linux-2023.sh
+  --user-data file://scripts/ec2-user-data-amazon-linux.sh
 ```
 
-Each script creates `ssm-user` when the SSM Agent has not created it yet, grants
+The script creates `ssm-user` when the SSM Agent has not created it yet, grants
 the passwordless sudo access expected by Session Manager, installs from a
 checkout at `~ssm-user/.local/src/dotfiles`, and selects Zsh as the login shell.
 It is safe to run again. `DOTFILES_REPOSITORY` and `DOTFILES_REF` may be set to

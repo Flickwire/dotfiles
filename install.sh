@@ -21,6 +21,12 @@ readonly PYTHON_VERSION="3.14.7"
 BACKUP_SUFFIX="$(date +%Y%m%d%H%M%S)"
 readonly BACKUP_SUFFIX
 readonly DRY_RUN="${DOTFILES_DRY_RUN:-0}"
+readonly INSTALL_JOBS="${DOTFILES_INSTALL_JOBS:-2}"
+
+if [[ ! "$INSTALL_JOBS" =~ ^[1-9][0-9]*$ ]]; then
+    printf 'Error: DOTFILES_INSTALL_JOBS must be a positive integer.\n' >&2
+    exit 1
+fi
 
 export PATH="$HOME/.local/bin:$HOME/.asdf/shims:$PATH"
 export ASDF_NODEJS_AUTO_ENABLE_COREPACK=1
@@ -294,31 +300,46 @@ wait_for_jobs() {
     return "$status"
 }
 
+PIDS=()
+run_job() {
+    "$@" & PIDS+=("$!")
+    if ((${#PIDS[@]} >= INSTALL_JOBS)); then
+        wait_for_jobs "${PIDS[@]}"
+        PIDS=()
+    fi
+}
+
+finish_jobs() {
+    wait_for_jobs "${PIDS[@]}"
+    PIDS=()
+}
+
 install_asdf_plugins() {
-    local pids=()
-    install_asdf_plugin nodejs https://github.com/asdf-vm/asdf-nodejs.git "$ASDF_NODEJS_COMMIT" & pids+=("$!")
-    install_asdf_plugin uv https://github.com/asdf-community/asdf-uv.git "$ASDF_UV_COMMIT" & pids+=("$!")
-    install_asdf_plugin awscli https://github.com/MetricMike/asdf-awscli.git "$ASDF_AWSCLI_COMMIT" & pids+=("$!")
-    install_asdf_plugin github-cli https://github.com/bartlomiejdanek/asdf-github-cli.git "$ASDF_GITHUB_CLI_COMMIT" & pids+=("$!")
-    install_asdf_plugin starship https://github.com/gr1m0h/asdf-starship.git "$ASDF_STARSHIP_COMMIT" & pids+=("$!")
-    install_asdf_plugin terraform https://github.com/asdf-community/asdf-hashicorp.git "$ASDF_TERRAFORM_COMMIT" & pids+=("$!")
-    wait_for_jobs "${pids[@]}"
+    run_job install_asdf_plugin nodejs https://github.com/asdf-vm/asdf-nodejs.git "$ASDF_NODEJS_COMMIT"
+    run_job install_asdf_plugin uv https://github.com/asdf-community/asdf-uv.git "$ASDF_UV_COMMIT"
+    run_job install_asdf_plugin awscli https://github.com/MetricMike/asdf-awscli.git "$ASDF_AWSCLI_COMMIT"
+    run_job install_asdf_plugin github-cli https://github.com/bartlomiejdanek/asdf-github-cli.git "$ASDF_GITHUB_CLI_COMMIT"
+    run_job install_asdf_plugin starship https://github.com/gr1m0h/asdf-starship.git "$ASDF_STARSHIP_COMMIT"
+    run_job install_asdf_plugin terraform https://github.com/asdf-community/asdf-hashicorp.git "$ASDF_TERRAFORM_COMMIT"
+    finish_jobs
+}
+
+install_asdf_tool() {
+    cd "$HOME"
+    "$HOME/.local/bin/asdf" install "$1" "$2"
 }
 
 install_asdf_tools() {
-    local pids=() tool version
+    local tool version
     while read -r tool version; do
         [[ -z "$tool" || "$tool" == \#* ]] && continue
         if [[ "$OS_ID" == "amzn" && "$OS_VERSION_ID" == "2" && "$tool" == "nodejs" ]]; then
             printf 'Skipping Node.js %s: Amazon Linux 2 glibc is unsupported.\n' "$version"
             continue
         fi
-        (
-            cd "$HOME"
-            "$HOME/.local/bin/asdf" install "$tool" "$version"
-        ) & pids+=("$!")
+        run_job install_asdf_tool "$tool" "$version"
     done <"$REPO_DIR/.tool-versions"
-    wait_for_jobs "${pids[@]}"
+    finish_jobs
     "$HOME/.local/bin/asdf" reshim
 
     ASDF_UV_VERSION="$UV_VERSION" "$HOME/.asdf/shims/uv" \
@@ -329,23 +350,23 @@ install_asdf_tools() {
 }
 
 install_zsh_plugins() {
-    local plugin_root="$HOME/.local/share/zsh/plugins" pids=()
-    install_git_checkout "$plugin_root/autosuggestions" https://github.com/zsh-users/zsh-autosuggestions.git \
-        "$ZSH_AUTOSUGGESTIONS_COMMIT" zsh-autosuggestions.zsh & pids+=("$!")
-    install_git_checkout "$plugin_root/syntax-highlighting" https://github.com/zsh-users/zsh-syntax-highlighting.git \
-        "$ZSH_SYNTAX_HIGHLIGHTING_COMMIT" zsh-syntax-highlighting.zsh & pids+=("$!")
-    install_git_checkout "$plugin_root/history-substring-search" https://github.com/zsh-users/zsh-history-substring-search.git \
-        "$ZSH_HISTORY_SEARCH_COMMIT" zsh-history-substring-search.zsh & pids+=("$!")
-    wait_for_jobs "${pids[@]}"
+    local plugin_root="$HOME/.local/share/zsh/plugins"
+    run_job install_git_checkout "$plugin_root/autosuggestions" https://github.com/zsh-users/zsh-autosuggestions.git \
+        "$ZSH_AUTOSUGGESTIONS_COMMIT" zsh-autosuggestions.zsh
+    run_job install_git_checkout "$plugin_root/syntax-highlighting" https://github.com/zsh-users/zsh-syntax-highlighting.git \
+        "$ZSH_SYNTAX_HIGHLIGHTING_COMMIT" zsh-syntax-highlighting.zsh
+    run_job install_git_checkout "$plugin_root/history-substring-search" https://github.com/zsh-users/zsh-history-substring-search.git \
+        "$ZSH_HISTORY_SEARCH_COMMIT" zsh-history-substring-search.zsh
+    finish_jobs
 }
 
 install_vim_plugins() {
-    local package_root="$HOME/.vim/pack/dotfiles/start" pids=()
-    install_git_checkout "$package_root/vim-airline" https://github.com/vim-airline/vim-airline.git \
-        "$VIM_AIRLINE_COMMIT" plugin/airline.vim & pids+=("$!")
-    install_git_checkout "$package_root/vim-terraform" https://github.com/hashivim/vim-terraform.git \
-        "$VIM_TERRAFORM_COMMIT" ftdetect/hcl.vim & pids+=("$!")
-    wait_for_jobs "${pids[@]}"
+    local package_root="$HOME/.vim/pack/dotfiles/start"
+    run_job install_git_checkout "$package_root/vim-airline" https://github.com/vim-airline/vim-airline.git \
+        "$VIM_AIRLINE_COMMIT" plugin/airline.vim
+    run_job install_git_checkout "$package_root/vim-terraform" https://github.com/hashivim/vim-terraform.git \
+        "$VIM_TERRAFORM_COMMIT" ftdetect/hcl.vim
+    finish_jobs
 }
 
 install_config() {
