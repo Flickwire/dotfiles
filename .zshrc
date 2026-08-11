@@ -4,30 +4,22 @@ SAVEHIST=10000
 
 setopt append_history
 setopt hist_ignore_dups
+setopt rcquotes
 setopt share_history
 bindkey -e
 
-export NVM_DIR="$HOME/.nvm"
-[[ -s "$NVM_DIR/nvm.sh" ]] && source "$NVM_DIR/nvm.sh"
-[[ -s "$NVM_DIR/bash_completion" ]] && source "$NVM_DIR/bash_completion"
-
 export PNPM_HOME="$HOME/.local/share/pnpm"
-path=("$HOME/.local/bin" "$PNPM_HOME" $path)
+path=("$HOME/.local/bin" "$HOME/.asdf/shims" "$PNPM_HOME" $path)
 typeset -U path PATH
+
+fpath=("$HOME/.asdf/completions" $fpath)
+autoload -Uz compinit && compinit
 
 if command -v starship >/dev/null; then
     eval "$(starship init zsh)"
 fi
 
-git-cleanup() {
-    local branch tracking
-    git remote prune origin
-    git fetch --prune
-    git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads |
-        while read -r branch tracking; do
-            [[ "$tracking" == "[gone]" ]] && git branch -d -- "$branch"
-        done
-}
+alias git-cleanup='git remote prune origin && git fetch -p && for branch in $(git for-each-ref --format ''%(refname) %(upstream:track)'' refs/heads | awk ''$2 == "[gone]" {sub("refs/heads/", "", $1); print $1}''); do git branch -D $branch; done'
 
 if [[ -r "$HOME/.zplug/init.zsh" ]]; then
     source "$HOME/.zplug/init.zsh"

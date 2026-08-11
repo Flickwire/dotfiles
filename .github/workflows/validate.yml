@@ -48,5 +48,13 @@ jobs:
           ./install.sh
       - name: Validate installed configuration
         run: |
-          STARSHIP_CONFIG="$HOME/.config/starship.toml" "$HOME/.local/bin/starship" prompt --path "$PWD" >/dev/null
+          export PATH="$HOME/.local/bin:$HOME/.asdf/shims:$PATH"
+          test "$(asdf version | awk '{print $1}')" = "v0.20.0"
+          test "$(uv --version)" = "uv 0.12.3"
+          test "$(node --version)" = "v24.19.0"
+          test "$(python --version)" = "Python 3.14.7"
+          [[ "$(aws --version)" == aws-cli/2.36.20* ]]
+          test "$(gh version --json version --jq .version)" = "2.97.0"
+          test "$(starship --version | awk 'NR == 1 {print $2}')" = "1.26.0"
+          STARSHIP_CONFIG="$HOME/.config/starship.toml" starship prompt --path "$PWD" >/dev/null
           zsh -ic exit
