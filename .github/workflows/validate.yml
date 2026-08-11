@@ -1,0 +1,114 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck zsh
+      - name: Validate shell files
+        run: |
+          shellcheck install.sh scripts/*.sh
+          bash -n install.sh scripts/*.sh
+          zsh -n .zshrc
+      - name: Exercise supported OS dispatch
+        run: |
+          while read -r id version; do
+            DOTFILES_DRY_RUN=1 DOTFILES_OS_ID="$id" DOTFILES_OS_VERSION_ID="$version" ./install.sh
+          done <<'EOF'
+          ubuntu 24.04
+          debian 13
+          amzn 2
+          amzn 2023
+          fedora 42
+          rhel 9
+          macos 15
+          EOF
+
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Run installer twice
+        run: |
+          ./install.sh
+          ./install.sh
+      - name: Validate installed configuration
+        run: |
+          export PATH="$HOME/.local/bin:$HOME/.asdf/shims:$PATH"
+          test "$(asdf version | awk '{print $1}')" = "v0.20.0"
+          test "$(uv --version)" = "uv 0.12.3"
+          test "$(node --version)" = "v24.19.0"
+          test "$(python --version)" = "Python 3.14.7"
+          [[ "$(aws --version)" == aws-cli/2.36.20* ]]
+          test "$(gh --version | awk 'NR == 1 {print $3}')" = "2.97.0"
+          test "$(starship --version | awk 'NR == 1 {print $2}')" = "1.26.0"
+          test "$(terraform version | awk 'NR == 1 {sub(/^v/, "", $2); print $2}')" = "1.15.8"
+          test -f "$HOME/.vim/pack/dotfiles/start/vim-airline/plugin/airline.vim"
+          test -f "$HOME/.vim/pack/dotfiles/start/vim-terraform/ftdetect/hcl.vim"
+          vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if !exists(":AirlineToggle") | cquit | endif' -c 'qa!'
+          touch /tmp/main.tf
+          vim -Nu "$HOME/.vimrc" -i NONE -es /tmp/main.tf -c 'if &filetype !=# "terraform" | cquit | endif' -c 'qa!'
+          STARSHIP_CONFIG="$HOME/.config/starship.toml" starship prompt --path "$PWD" >/dev/null
+          zsh -ic exit
+
+  amazon-linux-2023:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Run user data twice
+        env:
+          DOTFILES_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+          DOTFILES_REPOSITORY: ${{ github.event.pull_request.head.repo.clone_url || format('{0}/{1}.git', github.server_url, github.repository) }}
+        run: |
+          docker run --privileged --name dotfiles-al2023 \
+            --env DOTFILES_REF \
+            --env DOTFILES_REPOSITORY \
+            --volume "$PWD:/dotfiles:ro" \
+            docker.io/library/amazonlinux@sha256:1ebfb6ca925dfc74dc7bf3513e970590df3af9ba3a9c039f8143e5c7212021a0 \
+            bash /dotfiles/scripts/ec2-user-data-amazon-linux.sh
+          docker start --attach dotfiles-al2023
+          docker commit dotfiles-al2023 dotfiles-al2023-verified
+      - name: Validate SSM user environment
+        env:
+          DOTFILES_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          docker run --rm --interactive --env DOTFILES_REF dotfiles-al2023-verified bash -s <<'EOF'
+          test "$(getent passwd ssm-user | cut -d: -f7)" = "/usr/bin/zsh"
+          test "$(stat -c %U /home/ssm-user/.local)" = "ssm-user"
+          test "$(stat -c %U /home/ssm-user/.local/src/dotfiles)" = "ssm-user"
+          visudo -cf /etc/sudoers.d/90-ssm-user-dotfiles >/dev/null
+          test "$(runuser -u ssm-user -- env HOME=/home/ssm-user git -C /home/ssm-user/.local/src/dotfiles rev-parse HEAD)" = "$DOTFILES_REF"
+          runuser -u ssm-user -- env \
+            HOME=/home/ssm-user \
+            PATH=/home/ssm-user/.local/bin:/home/ssm-user/.asdf/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            bash -s <<'USER_EOF'
+          test "$(node --version)" = "v24.19.0"
+          test "$(uv --version | cut -d' ' -f1-2)" = "uv 0.12.3"
+          test "$(python --version)" = "Python 3.14.7"
+          [[ "$(aws --version)" == aws-cli/2.36.20* ]]
+          test "$(gh --version | awk 'NR == 1 {print $3}')" = "2.97.0"
+          test "$(starship --version | awk 'NR == 1 {print $2}')" = "1.26.0"
+          test "$(terraform version | awk 'NR == 1 {sub(/^v/, "", $2); print $2}')" = "1.15.8"
+          vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if !exists(":AirlineToggle") | cquit | endif' -c 'qa!'
+          touch /tmp/main.tf
+          vim -Nu "$HOME/.vimrc" -i NONE -es /tmp/main.tf -c 'if &filetype !=# "terraform" | cquit | endif' -c 'qa!'
+          STARSHIP_CONFIG="$HOME/.config/starship.toml" starship prompt --path /tmp >/dev/null
+          zsh -ic exit
+          USER_EOF
+          EOF
