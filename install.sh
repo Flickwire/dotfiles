@@ -384,6 +384,7 @@ $REPO_DIR/starship.toml|$HOME/.config/starship.toml
 $REPO_DIR/.zshrc|$HOME/.zshrc
 $REPO_DIR/.vimrc|$HOME/.vimrc
 $REPO_DIR/.tool-versions|$HOME/.tool-versions
+$REPO_DIR/.tmux.conf|$HOME/.tmux.conf
 EOF
 }
 
