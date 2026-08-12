@@ -55,6 +55,7 @@ jobs:
           ./install.sh
       - name: Validate installed configuration
         run: |
+          set -x
           export PATH="$HOME/.local/bin:$HOME/.asdf/shims:$PATH"
           test "$(asdf version | awk '{print $1}')" = "v0.20.0"
           test "$(uv --version | awk '{print $2}')" = "0.12.3"
@@ -111,6 +112,7 @@ jobs:
         env:
           DOTFILES_REF: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
+          set -x
           docker run --rm --interactive --env DOTFILES_REF dotfiles-al2023-verified bash -s <<'EOF'
           test "$(getent passwd ssm-user | cut -d: -f7)" = "/usr/bin/zsh"
           test "$(stat -c %U /home/ssm-user/.local)" = "ssm-user"

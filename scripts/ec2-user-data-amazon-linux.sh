@@ -40,7 +40,8 @@ run_as_ssm_user() {
     runuser -u "$SSM_USER" -- env HOME="$SSM_HOME" "$@"
 }
 
-printf '%s ALL=(ALL) NOPASSWD:ALL\n' "$SSM_USER" >"$SUDOERS_FILE"
+printf 'Defaults:%s !pam_acct_mgmt\n%s ALL=(ALL) NOPASSWD:ALL\n' \
+    "$SSM_USER" "$SSM_USER" >"$SUDOERS_FILE"
 chmod 0440 "$SUDOERS_FILE"
 visudo -cf "$SUDOERS_FILE" >/dev/null
 
