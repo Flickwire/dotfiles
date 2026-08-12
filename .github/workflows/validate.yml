@@ -31,7 +31,6 @@ jobs:
           ubuntu 24.04
           ubuntu 26.04
           debian 13
-          amzn 2
           amzn 2023
           fedora 44
           rhel 9
@@ -39,9 +38,14 @@ jobs:
           macos 15
           macos 26
           EOF
+          if DOTFILES_DRY_RUN=1 DOTFILES_OS_ID=amzn DOTFILES_OS_VERSION_ID=2 ./install.sh; then
+            printf 'Amazon Linux 2 was unexpectedly accepted.\n' >&2
+            exit 1
+          fi
 
   install:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,11 +64,27 @@ jobs:
           test "$(gh --version | awk 'NR == 1 {print $3}')" = "2.97.0"
           test "$(starship --version | awk 'NR == 1 {print $2}')" = "1.26.0"
           test "$(terraform version | awk 'NR == 1 {sub(/^v/, "", $2); print $2}')" = "1.15.8"
+          test "$(terraform-ls -v)" = "0.39.0"
           test -f "$HOME/.vim/pack/dotfiles/start/vim-airline/plugin/airline.vim"
           test -f "$HOME/.vim/pack/dotfiles/start/vim-terraform/ftdetect/hcl.vim"
+          test "$(git -C "$HOME/.vim/pack/dotfiles/start/YouCompleteMe" rev-parse HEAD)" = "d4c91430b70a21ce471c8572400b647d313995b4"
+          test -f "$HOME/.vim/pack/dotfiles/start/YouCompleteMe/third_party/ycmd/PYTHON_USED_DURING_BUILDING"
+          compgen -G "$HOME/.vim/pack/dotfiles/start/YouCompleteMe/third_party/ycmd/ycm_core.*" >/dev/null
+          test -x "$HOME/.local/bin/vscode-json-language-server"
+          test -x "$HOME/.local/bin/yaml-language-server"
+          vim -Nu NONE -i NONE -es -c "if !has('patch-9.1.0016') | cquit | endif" -c 'qa!'
+          vim -Nu "$HOME/.vimrc" -i NONE -es -c "if !py3eval('sys.version_info >= (3, 12)') | cquit | endif" -c 'qa!'
           vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if !exists(":AirlineToggle") | cquit | endif' -c 'qa!'
+          vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if !exists(":YcmCompleter") | cquit | endif' -c 'qa!'
+          vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if len(g:ycm_language_server) != 3 | cquit | endif' -c 'qa!'
           touch /tmp/main.tf
           vim -Nu "$HOME/.vimrc" -i NONE -es /tmp/main.tf -c 'if &filetype !=# "terraform" | cquit | endif' -c 'qa!'
+          touch /tmp/main.hcl /tmp/main.json /tmp/main.yaml /tmp/main.py /tmp/main.ts
+          vim -Nu "$HOME/.vimrc" -i NONE -es /tmp/main.hcl -c 'if &filetype !=# "hcl" | cquit | endif' -c 'qa!'
+          vim -Nu "$HOME/.vimrc" -i NONE -es /tmp/main.json -c 'if &filetype !=# "json" | cquit | endif' -c 'qa!'
+          vim -Nu "$HOME/.vimrc" -i NONE -es /tmp/main.yaml -c 'if &filetype !=# "yaml" | cquit | endif' -c 'qa!'
+          vim -Nu "$HOME/.vimrc" -i NONE -es /tmp/main.py -c 'if &filetype !=# "python" | cquit | endif' -c 'qa!'
+          vim -Nu "$HOME/.vimrc" -i NONE -es /tmp/main.ts -c 'if &filetype !=# "typescript" | cquit | endif' -c 'qa!'
           STARSHIP_CONFIG="$HOME/.config/starship.toml" starship prompt --path "$PWD" >/dev/null
           zsh -ic exit
 
@@ -108,7 +128,17 @@ jobs:
           test "$(gh --version | awk 'NR == 1 {print $3}')" = "2.97.0"
           test "$(starship --version | awk 'NR == 1 {print $2}')" = "1.26.0"
           test "$(terraform version | awk 'NR == 1 {sub(/^v/, "", $2); print $2}')" = "1.15.8"
+          test "$(terraform-ls -v)" = "0.39.0"
+          test "$(git -C "$HOME/.vim/pack/dotfiles/start/YouCompleteMe" rev-parse HEAD)" = "d4c91430b70a21ce471c8572400b647d313995b4"
+          test -f "$HOME/.vim/pack/dotfiles/start/YouCompleteMe/third_party/ycmd/PYTHON_USED_DURING_BUILDING"
+          compgen -G "$HOME/.vim/pack/dotfiles/start/YouCompleteMe/third_party/ycmd/ycm_core.*" >/dev/null
+          test -x "$HOME/.local/bin/vscode-json-language-server"
+          test -x "$HOME/.local/bin/yaml-language-server"
+          vim -Nu NONE -i NONE -es -c "if !has('patch-9.1.0016') | cquit | endif" -c 'qa!'
+          vim -Nu "$HOME/.vimrc" -i NONE -es -c "if !py3eval('sys.version_info >= (3, 12)') | cquit | endif" -c 'qa!'
           vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if !exists(":AirlineToggle") | cquit | endif' -c 'qa!'
+          vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if !exists(":YcmCompleter") | cquit | endif' -c 'qa!'
+          vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if len(g:ycm_language_server) != 3 | cquit | endif' -c 'qa!'
           touch /tmp/main.tf
           vim -Nu "$HOME/.vimrc" -i NONE -es /tmp/main.tf -c 'if &filetype !=# "terraform" | cquit | endif' -c 'qa!'
           STARSHIP_CONFIG="$HOME/.config/starship.toml" starship prompt --path /tmp >/dev/null

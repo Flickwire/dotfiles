@@ -18,21 +18,12 @@ if [[ "$ID" != "amzn" ]]; then
     exit 1
 fi
 
-case "$VERSION_ID" in
-    2)
-        printf 'Warning: Amazon Linux 2 is legacy; prefer Amazon Linux 2023.\n' >&2
-        PACKAGE_COMMAND=(yum install -y)
-        ;;
-    2023)
-        PACKAGE_COMMAND=(dnf install -y --allowerasing)
-        ;;
-    *)
-        printf 'Error: unsupported Amazon Linux release: %s\n' "$VERSION_ID" >&2
-        exit 1
-        ;;
-esac
+if [[ "$VERSION_ID" != "2023" ]]; then
+    printf 'Error: unsupported Amazon Linux release: %s\n' "$VERSION_ID" >&2
+    exit 1
+fi
 
-"${PACKAGE_COMMAND[@]}" \
+dnf install -y --allowerasing \
     curl git gnupg2 groff-base htop less sudo tar tmux unzip util-linux vim-enhanced zsh
 
 if ! id "$SSM_USER" >/dev/null 2>&1; then

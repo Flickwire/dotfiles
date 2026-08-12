@@ -16,6 +16,9 @@ readonly ZSH_SYNTAX_HIGHLIGHTING_COMMIT="c4d95591843d49838b7ad30081e7aba3135a670
 readonly ZSH_HISTORY_SEARCH_COMMIT="14c8d2e0ffaee98f2df9850b19944f32546fdea5"
 readonly VIM_AIRLINE_COMMIT="a2fefe599378b4a493287d10501f51e224753690"
 readonly VIM_TERRAFORM_COMMIT="520498fab16a3a11f2ae1b8cb65e0a1684bc317a"
+readonly YCM_COMMIT="d4c91430b70a21ce471c8572400b647d313995b4"
+readonly VIM_COMMIT="d474289d0f12505b16b59a61ad161c57c3e596cb"
+readonly TERRAFORM_LS_VERSION="0.39.0"
 readonly UV_VERSION="0.12.3"
 readonly PYTHON_VERSION="3.14.7"
 BACKUP_SUFFIX="$(date +%Y%m%d%H%M%S)"
@@ -132,17 +135,47 @@ install_apt_packages() {
 
 install_amazon_packages() {
     map_packages rpm "$@"
-    if [[ "$OS_VERSION_ID" == "2" ]]; then
-        run "${SUDO[@]}" yum install -y "${PACKAGES[@]}"
-        return
-    fi
-
     if [[ "$OS_VERSION_ID" != "2023" ]]; then
         printf 'Error: unsupported Amazon Linux release: %s\n' "$OS_VERSION_ID" >&2
         exit 1
     fi
 
     run "${SUDO[@]}" dnf install -y --allowerasing "${PACKAGES[@]}"
+}
+
+install_ycm_dependencies() {
+    case "$OS_ID" in
+        ubuntu | debian)
+            ensure_sudo
+            install_apt_packages build-essential cmake python3-dev vim-nox
+            YCM_PYTHON="/usr/bin/python3"
+            ;;
+        amzn)
+            ensure_sudo
+            install_amazon_packages cmake gcc-c++ gnupg2 make python3.12 python3.12-devel vim-enhanced
+            YCM_PYTHON="/usr/bin/python3.12"
+            ;;
+        fedora)
+            ensure_sudo
+            install_dnf_packages cmake gcc-c++ make python3-devel vim-enhanced
+            YCM_PYTHON="/usr/bin/python3"
+            ;;
+        rhel)
+            ensure_sudo
+            if [[ "$OS_VERSION_ID" == 9* ]]; then
+                install_dnf_packages cmake gcc-c++ git make ncurses-devel python3.12 python3.12-devel
+                YCM_PYTHON="/usr/bin/python3.12"
+            else
+                install_dnf_packages cmake gcc-c++ make python3-devel vim-enhanced
+                YCM_PYTHON="/usr/bin/python3"
+            fi
+            ;;
+        macos)
+            install_macos_packages cmake python@3.14 vim
+            YCM_PYTHON="$(brew --prefix python@3.14)/bin/python3.14"
+            ;;
+    esac
+    readonly YCM_PYTHON
 }
 
 install_dnf_packages() {
@@ -292,6 +325,14 @@ install_git_checkout() {
     git -C "$checkout_dir" checkout --detach "$commit"
 }
 
+install_recursive_git_checkout() {
+    local checkout_dir="$1" commit="$3" required_file="$4" url="$2"
+
+    install_git_checkout "$checkout_dir" "$url" "$commit" "$required_file"
+    git -C "$checkout_dir" submodule sync --recursive
+    git -C "$checkout_dir" submodule update --init --recursive
+}
+
 wait_for_jobs() {
     local pid status=0
     for pid in "$@"; do
@@ -333,10 +374,6 @@ install_asdf_tools() {
     local tool version
     while read -r tool version; do
         [[ -z "$tool" || "$tool" == \#* ]] && continue
-        if [[ "$OS_ID" == "amzn" && "$OS_VERSION_ID" == "2" && "$tool" == "nodejs" ]]; then
-            printf 'Skipping Node.js %s: Amazon Linux 2 glibc is unsupported.\n' "$version"
-            continue
-        fi
         run_job install_asdf_tool "$tool" "$version"
     done <"$REPO_DIR/.tool-versions"
     finish_jobs
@@ -347,6 +384,116 @@ install_asdf_tools() {
 
     mkdir -p "$HOME/.asdf/completions"
     "$HOME/.local/bin/asdf" completion zsh >"$HOME/.asdf/completions/_asdf"
+}
+
+install_rhel9_vim() {
+    if [[ "$OS_ID" != "rhel" || "$OS_VERSION_ID" != 9* ]]; then
+        return 0
+    fi
+
+    local source_dir="$HOME/.local/src/vim"
+    install_git_checkout "$source_dir" https://github.com/vim/vim.git "$VIM_COMMIT" src/Makefile
+    if "$HOME/.local/bin/vim" --version 2>/dev/null | grep -q '^VIM - Vi IMproved 9\.2'; then
+        return
+    fi
+
+    (
+        cd "$source_dir"
+        make distclean >/dev/null 2>&1 || true
+        ./configure \
+            --prefix="$HOME/.local" \
+            --with-features=huge \
+            --enable-multibyte \
+            --enable-terminal \
+            --enable-python3interp=dynamic \
+            --with-python3-command=python3.12 \
+            --enable-gui=no \
+            --without-x
+        make -j"$INSTALL_JOBS"
+        make install
+    )
+}
+
+verify_vim_for_ycm() {
+    local result
+    result="$(vim -Nu "$REPO_DIR/.vimrc" -n --not-a-term \
+        -c 'py3 import sys; print("%d.%d" % sys.version_info[:2])' -c 'qa!' 2>&1)"
+    if ! vim -Nu NONE -n -es \
+        -c "if !has('patch-9.1.0016') | cquit | endif" -c 'qa!' ||
+        [[ ! "$result" =~ (3\.1[2-9]|3\.[2-9][0-9]) ]]; then
+        printf 'Error: YouCompleteMe requires Vim 9.1.0016+ with Python 3.12+.\n' >&2
+        printf '%s\n' "$result" >&2
+        exit 1
+    fi
+}
+
+terraform_ls_target() {
+    local machine os
+    machine="$(uname -m)"
+    os="$(uname -s)"
+    case "$os:$machine" in
+        Linux:x86_64)
+            TERRAFORM_LS_ASSET="linux_amd64"
+            TERRAFORM_LS_SHA256="7750edc736845fd8c04ff0fc6332423c12d8275b358668c8c17e8aedc43ef971"
+            ;;
+        Linux:aarch64 | Linux:arm64)
+            TERRAFORM_LS_ASSET="linux_arm64"
+            TERRAFORM_LS_SHA256="62f32ea22cb78e5e5667ed638ad6e0fbde30ab59228d073c3c9bb249f89c7f5a"
+            ;;
+        Darwin:x86_64)
+            TERRAFORM_LS_ASSET="darwin_amd64"
+            TERRAFORM_LS_SHA256="cc5bbc5b5a39d12d455c0d2b1e4b3a2c1f237d02d2cf819cf5252358f2d674de"
+            ;;
+        Darwin:arm64 | Darwin:aarch64)
+            TERRAFORM_LS_ASSET="darwin_arm64"
+            TERRAFORM_LS_SHA256="6f80fe0b34af184175508f3d9135d8159f5dce4000d9b39540553eb1c267c54b"
+            ;;
+        *)
+            printf 'Error: unsupported terraform-ls target: %s %s\n' "$os" "$machine" >&2
+            exit 1
+            ;;
+    esac
+}
+
+install_terraform_ls() {
+    if [[ -x "$HOME/.local/bin/terraform-ls" ]] &&
+        [[ "$("$HOME/.local/bin/terraform-ls" -v)" == *"$TERRAFORM_LS_VERSION"* ]]; then
+        return
+    fi
+
+    local archive temp_dir url
+    terraform_ls_target
+    temp_dir="$(mktemp -d)"
+    TEMP_PATHS+=("$temp_dir")
+    archive="$temp_dir/terraform-ls.zip"
+    url="https://releases.hashicorp.com/terraform-ls/$TERRAFORM_LS_VERSION/terraform-ls_${TERRAFORM_LS_VERSION}_${TERRAFORM_LS_ASSET}.zip"
+    download --output "$archive" "$url"
+    verify_sha256 "$TERRAFORM_LS_SHA256" "$archive"
+    unzip -q "$archive" -d "$temp_dir"
+    mkdir -p "$HOME/.local/bin"
+    install -m 0755 "$temp_dir/terraform-ls" "$HOME/.local/bin/terraform-ls"
+}
+
+install_node_language_servers() {
+    local destination="$HOME/.local/share/dotfiles-language-servers"
+    local manifest_hash marker
+    manifest_hash="$(git hash-object "$REPO_DIR/language-servers/package-lock.json")"
+    marker="$destination/.installed-lock-hash"
+    if [[ -r "$marker" ]] && [[ "$(<"$marker")" == "$manifest_hash" ]] &&
+        [[ -x "$destination/node_modules/.bin/vscode-json-language-server" ]] &&
+        [[ -x "$destination/node_modules/.bin/yaml-language-server" ]]; then
+        return
+    fi
+
+    mkdir -p "$destination" "$HOME/.local/bin"
+    install -m 0644 "$REPO_DIR/language-servers/package.json" "$destination/package.json"
+    install -m 0644 "$REPO_DIR/language-servers/package-lock.json" "$destination/package-lock.json"
+    npm ci --omit=dev --no-audit --no-fund --prefix "$destination"
+    ln -sfn "$destination/node_modules/.bin/vscode-json-language-server" \
+        "$HOME/.local/bin/vscode-json-language-server"
+    ln -sfn "$destination/node_modules/.bin/yaml-language-server" \
+        "$HOME/.local/bin/yaml-language-server"
+    printf '%s\n' "$manifest_hash" >"$marker"
 }
 
 install_zsh_plugins() {
@@ -367,6 +514,25 @@ install_vim_plugins() {
     run_job install_git_checkout "$package_root/vim-terraform" https://github.com/hashivim/vim-terraform.git \
         "$VIM_TERRAFORM_COMMIT" ftdetect/hcl.vim
     finish_jobs
+}
+
+install_youcompleteme() {
+    local checkout_dir="$HOME/.vim/pack/dotfiles/start/YouCompleteMe"
+    local fingerprint marker
+    install_recursive_git_checkout "$checkout_dir" https://github.com/ycm-core/YouCompleteMe.git \
+        "$YCM_COMMIT" install.py
+
+    fingerprint="$YCM_COMMIT|$($YCM_PYTHON --version)|$(node --version)|--ts-completer"
+    marker="$HOME/.local/state/dotfiles/youcompleteme-build"
+    if [[ -r "$marker" ]] && [[ "$(<"$marker")" == "$fingerprint" ]] &&
+        [[ -r "$checkout_dir/third_party/ycmd/PYTHON_USED_DURING_BUILDING" ]] &&
+        compgen -G "$checkout_dir/third_party/ycmd/ycm_core.*" >/dev/null; then
+        return
+    fi
+
+    YCM_CORES="$INSTALL_JOBS" "$YCM_PYTHON" "$checkout_dir/install.py" --ts-completer
+    mkdir -p "$(dirname -- "$marker")"
+    printf '%s\n' "$fingerprint" >"$marker"
 }
 
 install_config() {
@@ -390,7 +556,12 @@ EOF
 
 detect_os
 printf 'Detected OS: %s %s\n' "$OS_ID" "$OS_VERSION_ID"
+if [[ "$OS_ID" == "amzn" && "$OS_VERSION_ID" != "2023" ]]; then
+    printf 'Error: unsupported Amazon Linux release: %s\n' "$OS_VERSION_ID" >&2
+    exit 1
+fi
 install_system_packages
+install_ycm_dependencies
 
 if [[ "$DRY_RUN" == "1" ]]; then
     exit 0
@@ -398,9 +569,14 @@ fi
 
 install_asdf
 install_asdf_plugins
-install_zsh_plugins
-install_vim_plugins
 install_config
 install_asdf_tools
+install_rhel9_vim
+verify_vim_for_ycm
+install_terraform_ls
+install_node_language_servers
+install_zsh_plugins
+install_vim_plugins
+install_youcompleteme
 
 printf 'Dotfiles installed. Start zsh or run: chsh -s %q\n' "$(command -v zsh)"
