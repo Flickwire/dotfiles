@@ -37,7 +37,7 @@ asdf manages the user-facing development tools pinned in `.tool-versions`:
 
 - Node.js 24.19.0, the latest LTS release
 - uv 0.12.3
-- AWS CLI 2.36.20
+- AWS CLI 2.36.21
 - GitHub CLI 2.97.0
 - Starship 1.26.0
 - Terraform 1.15.8

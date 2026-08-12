@@ -1,6 +1,6 @@
 uv 0.12.3
 nodejs 24.19.0
-awscli 2.36.20
+awscli 2.36.21
 github-cli 2.97.0
 starship 1.26.0
 terraform 1.15.8
