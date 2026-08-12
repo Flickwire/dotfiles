@@ -76,8 +76,8 @@ jobs:
           vim -Nu NONE -i NONE -es -c "if !has('patch-9.1.0016') | cquit | endif" -c 'qa!'
           vim -Nu "$HOME/.vimrc" -i NONE -es -c "if !py3eval('sys.version_info >= (3, 12)') | cquit | endif" -c 'qa!'
           vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if !exists(":AirlineToggle") | cquit | endif' -c 'qa!'
-          vim -Nu "$HOME/.vimrc" -i NONE --not-a-term \
-            -c 'if !exists(":YcmCompleter") | messages | cquit | endif' -c 'qa!'
+          vim -Nu "$HOME/.vimrc" -i NONE -es \
+            -c 'if empty(filter(getscriptinfo(), '\''v:val.name =~# "YouCompleteMe/plugin/youcompleteme.vim$"'\'')) | cquit | endif' -c 'qa!'
           vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if len(g:ycm_language_server) != 3 | cquit | endif' -c 'qa!'
           touch /tmp/main.tf
           vim -Nu "$HOME/.vimrc" -i NONE -es /tmp/main.tf -c 'if &filetype !=# "terraform" | cquit | endif' -c 'qa!'
@@ -140,8 +140,8 @@ jobs:
           vim -Nu NONE -i NONE -es -c "if !has('patch-9.1.0016') | cquit | endif" -c 'qa!'
           vim -Nu "$HOME/.vimrc" -i NONE -es -c "if !py3eval('sys.version_info >= (3, 12)') | cquit | endif" -c 'qa!'
           vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if !exists(":AirlineToggle") | cquit | endif' -c 'qa!'
-          vim -Nu "$HOME/.vimrc" -i NONE --not-a-term \
-            -c 'if !exists(":YcmCompleter") | messages | cquit | endif' -c 'qa!'
+          vim -Nu "$HOME/.vimrc" -i NONE -es \
+            -c 'if empty(filter(getscriptinfo(), '\''v:val.name =~# "YouCompleteMe/plugin/youcompleteme.vim$"'\'')) | cquit | endif' -c 'qa!'
           vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if len(g:ycm_language_server) != 3 | cquit | endif' -c 'qa!'
           touch /tmp/main.tf
           vim -Nu "$HOME/.vimrc" -i NONE -es /tmp/main.tf -c 'if &filetype !=# "terraform" | cquit | endif' -c 'qa!'
