@@ -126,9 +126,14 @@ install_system_packages() {
                 break
             fi
         done
-        if [[ "$OS_ID" != "macos" ]] && ! ldconfig -p | grep -F 'libatomic.so.1' >/dev/null; then
-            needs_install=1
-        fi
+        case "$OS_ID" in
+            ubuntu)
+                dpkg-query --show libatomic1 >/dev/null 2>&1 || needs_install=1
+                ;;
+            amzn)
+                rpm --query libatomic >/dev/null 2>&1 || needs_install=1
+                ;;
+        esac
     fi
     if ((needs_install == 0)); then
         return
