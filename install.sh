@@ -113,6 +113,27 @@ install_packages() {
 }
 
 install_system_packages() {
+    local command_name
+    local needs_install=0
+    local required=(curl git gpg groff htop less tar tmux unzip vim zsh)
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        needs_install=1
+    else
+        for command_name in "${required[@]}"; do
+            if ! command -v "$command_name" >/dev/null; then
+                needs_install=1
+                break
+            fi
+        done
+        if [[ "$OS_ID" != "macos" ]] && ! ldconfig -p | grep -Fq 'libatomic.so.1'; then
+            needs_install=1
+        fi
+    fi
+    if ((needs_install == 0)); then
+        return
+    fi
+
     case "$OS_ID" in
         ubuntu)
             ensure_sudo
