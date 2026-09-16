@@ -9,11 +9,18 @@ setopt share_history
 bindkey -e
 
 export PNPM_HOME="$HOME/.local/share/pnpm"
-path=("$HOME/.local/bin" "$HOME/.asdf/shims" "$PNPM_HOME" $path)
+if [[ -x /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [[ -x /usr/local/bin/brew ]]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+fi
+path=("$HOME/.local/bin" "$PNPM_HOME" $path)
 typeset -U path PATH
 
-fpath=("$HOME/.asdf/completions" $fpath)
 autoload -Uz compinit && compinit
+
+export NVM_DIR="$HOME/.nvm"
+[[ -s "$NVM_DIR/nvm.sh" ]] && source "$NVM_DIR/nvm.sh"
 
 if command -v starship >/dev/null; then
     eval "$(starship init zsh)"

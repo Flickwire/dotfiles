@@ -13,27 +13,13 @@ fi
 
 # shellcheck source=/dev/null
 source /etc/os-release
-if [[ "$ID" != "amzn" ]]; then
-    printf 'Error: this user-data script supports Amazon Linux only.\n' >&2
+if [[ "$ID" != "amzn" || "$VERSION_ID" != "2023" ]]; then
+    printf 'Error: this user-data script requires Amazon Linux 2023.\n' >&2
     exit 1
 fi
 
-case "$VERSION_ID" in
-    2)
-        printf 'Warning: Amazon Linux 2 is legacy; prefer Amazon Linux 2023.\n' >&2
-        PACKAGE_COMMAND=(yum install -y)
-        ;;
-    2023)
-        PACKAGE_COMMAND=(dnf install -y --allowerasing)
-        ;;
-    *)
-        printf 'Error: unsupported Amazon Linux release: %s\n' "$VERSION_ID" >&2
-        exit 1
-        ;;
-esac
-
-"${PACKAGE_COMMAND[@]}" \
-    curl git gnupg2 groff-base htop less sudo tar tmux unzip util-linux vim-enhanced zsh
+dnf install -y --allowerasing \
+    curl git gnupg2 groff-base htop less libatomic sudo tar tmux unzip util-linux vim-enhanced zsh
 
 if ! id "$SSM_USER" >/dev/null 2>&1; then
     useradd --create-home --shell /bin/bash "$SSM_USER"
