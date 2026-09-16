@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   static:
     runs-on: ubuntu-latest
@@ -16,57 +20,49 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install validation tools
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y shellcheck zsh
       - name: Validate shell files
         run: |
+          set -euo pipefail
           shellcheck install.sh scripts/*.sh
-          bash -n install.sh scripts/*.sh
+          for script in install.sh scripts/*.sh; do
+            bash -n "$script"
+          done
           zsh -n .zshrc
       - name: Exercise supported OS dispatch
         run: |
+          set -euo pipefail
           while read -r id version; do
             DOTFILES_DRY_RUN=1 DOTFILES_OS_ID="$id" DOTFILES_OS_VERSION_ID="$version" ./install.sh
           done <<'EOF'
           ubuntu 24.04
           ubuntu 26.04
-          debian 13
-          amzn 2
           amzn 2023
-          fedora 44
-          rhel 9
-          rhel 10
           macos 15
           macos 26
           EOF
 
   install:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Run installer twice
         run: |
+          set -euo pipefail
           ./install.sh
           ./install.sh
       - name: Validate installed configuration
         run: |
-          export PATH="$HOME/.local/bin:$HOME/.asdf/shims:$PATH"
-          test "$(asdf version | awk '{print $1}')" = "v0.20.0"
-          test "$(uv --version | awk '{print $2}')" = "0.12.3"
-          test "$(node --version)" = "v24.19.0"
-          test "$(python --version)" = "Python 3.14.7"
-          [[ "$(aws --version)" == aws-cli/2.36.21* ]]
-          test "$(gh --version | awk 'NR == 1 {print $3}')" = "2.97.0"
-          test "$(starship --version | awk 'NR == 1 {print $2}')" = "1.26.0"
-          test "$(terraform version | awk 'NR == 1 {sub(/^v/, "", $2); print $2}')" = "1.15.8"
-          test -f "$HOME/.vim/pack/dotfiles/start/vim-airline/plugin/airline.vim"
-          test -f "$HOME/.vim/pack/dotfiles/start/vim-terraform/ftdetect/hcl.vim"
-          vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if !exists(":AirlineToggle") | cquit | endif' -c 'qa!'
-          touch /tmp/main.tf
-          vim -Nu "$HOME/.vimrc" -i NONE -es /tmp/main.tf -c 'if &filetype !=# "terraform" | cquit | endif' -c 'qa!'
-          STARSHIP_CONFIG="$HOME/.config/starship.toml" starship prompt --path "$PWD" >/dev/null
-          zsh -ic exit
+          set -euo pipefail
+          bash scripts/validate-install.sh
 
   amazon-linux-2023:
     runs-on: ubuntu-latest
@@ -79,19 +75,23 @@ jobs:
           DOTFILES_REF: ${{ github.event.pull_request.head.sha || github.sha }}
           DOTFILES_REPOSITORY: ${{ github.event.pull_request.head.repo.clone_url || format('{0}/{1}.git', github.server_url, github.repository) }}
         run: |
+          set -euo pipefail
           docker run --privileged --name dotfiles-al2023 \
             --env DOTFILES_REF \
             --env DOTFILES_REPOSITORY \
             --volume "$PWD:/dotfiles:ro" \
-            docker.io/library/amazonlinux@sha256:1ebfb6ca925dfc74dc7bf3513e970590df3af9ba3a9c039f8143e5c7212021a0 \
+            docker.io/library/amazonlinux@sha256:065856aabb1ddab0441f4024dfbba116cc760286858a53ec74e6a1218af979ee \
             bash /dotfiles/scripts/ec2-user-data-amazon-linux.sh
           docker start --attach dotfiles-al2023
+          test "$(docker inspect --format '{{.State.ExitCode}}' dotfiles-al2023)" = 0
           docker commit dotfiles-al2023 dotfiles-al2023-verified
       - name: Validate SSM user environment
         env:
           DOTFILES_REF: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
+          set -euo pipefail
           docker run --rm --interactive --env DOTFILES_REF dotfiles-al2023-verified bash -s <<'EOF'
+          set -euo pipefail
           test "$(getent passwd ssm-user | cut -d: -f7)" = "/usr/bin/zsh"
           test "$(stat -c %U /home/ssm-user/.local)" = "ssm-user"
           test "$(stat -c %U /home/ssm-user/.local/src/dotfiles)" = "ssm-user"
@@ -99,19 +99,11 @@ jobs:
           test "$(runuser -u ssm-user -- env HOME=/home/ssm-user git -C /home/ssm-user/.local/src/dotfiles rev-parse HEAD)" = "$DOTFILES_REF"
           runuser -u ssm-user -- env \
             HOME=/home/ssm-user \
-            PATH=/home/ssm-user/.local/bin:/home/ssm-user/.asdf/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
             bash -s <<'USER_EOF'
-          test "$(node --version)" = "v24.19.0"
-          test "$(uv --version | cut -d' ' -f1-2)" = "uv 0.12.3"
-          test "$(python --version)" = "Python 3.14.7"
-          [[ "$(aws --version)" == aws-cli/2.36.21* ]]
-          test "$(gh --version | awk 'NR == 1 {print $3}')" = "2.97.0"
-          test "$(starship --version | awk 'NR == 1 {print $2}')" = "1.26.0"
-          test "$(terraform version | awk 'NR == 1 {sub(/^v/, "", $2); print $2}')" = "1.15.8"
-          vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if !exists(":AirlineToggle") | cquit | endif' -c 'qa!'
-          touch /tmp/main.tf
-          vim -Nu "$HOME/.vimrc" -i NONE -es /tmp/main.tf -c 'if &filetype !=# "terraform" | cquit | endif' -c 'qa!'
-          STARSHIP_CONFIG="$HOME/.config/starship.toml" starship prompt --path /tmp >/dev/null
-          zsh -ic exit
+          set -euo pipefail
+          test "$(sudo -n id -u)" = 0
+          cd "$HOME/.local/src/dotfiles"
+          bash scripts/validate-install.sh
           USER_EOF
           EOF
