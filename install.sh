@@ -126,7 +126,7 @@ install_system_packages() {
                 break
             fi
         done
-        if [[ "$OS_ID" != "macos" ]] && ! ldconfig -p | grep -Fq 'libatomic.so.1'; then
+        if [[ "$OS_ID" != "macos" ]] && ! ldconfig -p | grep -F 'libatomic.so.1' >/dev/null; then
             needs_install=1
         fi
     fi
