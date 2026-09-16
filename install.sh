@@ -403,6 +403,9 @@ install_system_packages
 if [[ "$DRY_RUN" == "1" ]]; then
     exit 0
 fi
+if [[ "$OS_ID" != "macos" ]]; then
+    ensure_sudo
+fi
 install_native_tools
 configure_python
 install_node
