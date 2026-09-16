@@ -19,7 +19,7 @@ if [[ "$ID" != "amzn" || "$VERSION_ID" != "2023" ]]; then
 fi
 
 dnf install -y --allowerasing \
-    curl git gnupg2 groff-base htop less sudo tar tmux unzip util-linux vim-enhanced zsh
+    curl git gnupg2 groff-base htop less libatomic sudo tar tmux unzip util-linux vim-enhanced zsh
 
 if ! id "$SSM_USER" >/dev/null 2>&1; then
     useradd --create-home --shell /bin/bash "$SSM_USER"
