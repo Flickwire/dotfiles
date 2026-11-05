@@ -1,0 +1,6 @@
+[misc]
+disable = ["containers"]
+show_skipped = true
+
+[commands]
+"Mise managed tools" = "mise upgrade --global"

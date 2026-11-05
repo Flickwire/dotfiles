@@ -1,0 +1,30 @@
+[tools]
+"aqua:BurntSushi/ripgrep" = "latest"
+"aqua:casey/just" = "latest"
+"aqua:dandavison/delta" = "latest"
+"aqua:derailed/k9s" = "latest"
+"aqua:gitui-org/gitui" = "latest"
+"aqua:hadolint/hadolint" = "latest"
+"aqua:helm/helm" = "latest"
+"aqua:helmfile/helmfile" = "latest"
+"aqua:jesseduffield/lazygit" = "latest"
+"aqua:jqlang/jq" = "latest"
+"aqua:junegunn/fzf" = "latest"
+"aqua:koalaman/shellcheck" = "latest"
+"aqua:kubernetes/kubernetes/kubectl" = "latest"
+"aqua:mikefarah/yq" = "latest"
+"aqua:mvdan/sh" = "latest"
+"aqua:sharkdp/bat" = "latest"
+"aqua:sharkdp/fd" = "latest"
+"aqua:sharkdp/hyperfine" = "latest"
+awscli = { version = "latest", symlink_bins = "true" }
+github-cli = "latest"
+glab = "latest"
+node = ["18.20.8", "18.18.2", "20.20.2", "24.9.0", "24.21.0", "24.22.2", "26.13.0"]
+pnpm = "latest"
+starship = "latest"
+terraform = "latest"
+uv = "latest"
+
+[settings]
+idiomatic_version_file_enable_tools = ["node"]

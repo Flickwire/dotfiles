@@ -4,10 +4,7 @@ set -euo pipefail
 
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_DIR
-readonly NVM_COMMIT="f0b0c6bb0b281ceeb106c8cf9ab8fde141215092" # v0.40.7
-readonly COREPACK_VERSION="0.36.0"
-readonly STARSHIP_VERSION="1.26.0"
-readonly AWSCLI_VERSION="2.36.45"
+readonly MISE_VERSION="2026.11.1"
 readonly ZSH_AUTOSUGGESTIONS_COMMIT="85919cd1ffa7d2d5412f6d3fe437ebdbeeec4fc5"
 readonly ZSH_SYNTAX_HIGHLIGHTING_COMMIT="2fc57d63067c18b1100ecdbf684fa5baf49459d1"
 readonly ZSH_HISTORY_SEARCH_COMMIT="14c8d2e0ffaee98f2df9850b19944f32546fdea5"
@@ -24,7 +21,6 @@ if [[ ! "$INSTALL_JOBS" =~ ^[1-9][0-9]*$ ]]; then
 fi
 
 export PATH="$HOME/.local/bin:$PATH"
-export NVM_DIR="$HOME/.nvm"
 TEMP_PATHS=()
 SUDO=()
 
@@ -64,7 +60,6 @@ download() {
 detect_os() {
     OS_ID="${DOTFILES_OS_ID:-}"
     OS_VERSION_ID="${DOTFILES_OS_VERSION_ID:-}"
-    OS_CODENAME=""
     if [[ -z "$OS_ID" ]]; then
         if [[ "$(uname -s)" == "Darwin" ]]; then
             OS_ID="macos"
@@ -74,7 +69,6 @@ detect_os() {
             source /etc/os-release
             OS_ID="$ID"
             OS_VERSION_ID="${VERSION_ID:-}"
-            OS_CODENAME="${VERSION_CODENAME:-}"
         else
             printf 'Error: cannot detect this operating system.\n' >&2
             exit 1
@@ -115,7 +109,7 @@ install_packages() {
 install_system_packages() {
     local command_name
     local needs_install=0
-    local required=(curl git gpg groff htop less tar tmux unzip vim zsh)
+    local required=(curl git gpg groff htop less tar tmux unzip vim xz zsh)
 
     if [[ "$DRY_RUN" == "1" ]]; then
         needs_install=1
@@ -143,11 +137,11 @@ install_system_packages() {
         ubuntu)
             ensure_sudo
             run "${SUDO[@]}" apt-get update
-            install_packages ca-certificates curl git gnupg groff-base htop less libatomic1 tar tmux unzip vim zsh software-properties-common
+            install_packages ca-certificates curl git gnupg groff-base htop less libatomic1 tar tmux unzip vim xz-utils zsh software-properties-common
             ;;
         amzn)
             ensure_sudo
-            install_packages ca-certificates curl git gnupg2 groff-base htop less libatomic tar tmux unzip vim-enhanced zsh
+            install_packages ca-certificates curl git gnupg2 groff-base htop less libatomic tar tmux unzip vim-enhanced xz zsh
             ;;
         macos)
             if [[ "$DRY_RUN" != "1" ]] && ! command -v brew >/dev/null; then
@@ -155,87 +149,38 @@ install_system_packages() {
                 exit 1
             fi
             run brew update
-            install_packages ca-certificates curl git gnupg groff htop less tmux unzip vim zsh
+            install_packages ca-certificates curl git gnupg groff htop less tmux unzip vim xz zsh
             ;;
     esac
 }
 
-apt_has_package() {
-    local candidate
-    candidate="$(apt-cache policy "$1" | awk '/Candidate:/ {print $2; exit}')"
-    [[ -n "$candidate" && "$candidate" != "(none)" ]]
-}
+mise_target() {
+    local machine os
+    machine="$(uname -m)"
+    os="$(uname -s)"
 
-install_native_tools() {
-    local temp_dir
-    temp_dir="$(mktemp -d)"
-    TEMP_PATHS+=("$temp_dir")
-    case "$OS_ID" in
-        ubuntu)
-            "${SUDO[@]}" add-apt-repository -y universe
-            download --output "$temp_dir/githubcli.gpg" https://cli.github.com/packages/githubcli-archive-keyring.gpg
-            download --output "$temp_dir/hashicorp.asc" https://apt.releases.hashicorp.com/gpg
-            gpg --batch --yes --dearmor --output "$temp_dir/hashicorp.gpg" "$temp_dir/hashicorp.asc"
-            "${SUDO[@]}" install -d -m 0755 /etc/apt/keyrings
-            "${SUDO[@]}" install -m 0644 "$temp_dir/githubcli.gpg" /etc/apt/keyrings/githubcli.gpg
-            "${SUDO[@]}" install -m 0644 "$temp_dir/hashicorp.gpg" /etc/apt/keyrings/hashicorp.gpg
-            printf 'deb [arch=%s signed-by=/etc/apt/keyrings/githubcli.gpg] https://cli.github.com/packages stable main\n' \
-                "$(dpkg --print-architecture)" | "${SUDO[@]}" tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-            printf 'deb [arch=%s signed-by=/etc/apt/keyrings/hashicorp.gpg] https://apt.releases.hashicorp.com %s main\n' \
-                "$(dpkg --print-architecture)" "$OS_CODENAME" | "${SUDO[@]}" tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
-            "${SUDO[@]}" apt-get update
-            if ! apt_has_package python3.14; then
-                "${SUDO[@]}" add-apt-repository -y ppa:deadsnakes/ppa
-                "${SUDO[@]}" apt-get update
-            fi
-            install_packages python3.14 python3.14-venv gh terraform
-            if apt_has_package awscli; then
-                install_packages awscli
-                remove_fallback_links aws aws_completer
-            else
-                install_awscli
-            fi
-            if apt_has_package starship; then
-                install_packages starship
-                remove_fallback_links starship
-            else
-                install_starship
-            fi
+    case "$os:$machine" in
+        Linux:x86_64)
+            MISE_ASSET="linux-x64"
+            MISE_SHA256="7eb7cd0f3d60443b17bc0915534b65b68c2f9b37e721946687dc6a72d006d32c"
             ;;
-        amzn)
-            download --output "$temp_dir/gh-cli.repo" https://cli.github.com/packages/rpm/gh-cli.repo
-            download --output "$temp_dir/hashicorp.repo" https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
-            "${SUDO[@]}" install -m 0644 "$temp_dir/gh-cli.repo" /etc/yum.repos.d/gh-cli.repo
-            "${SUDO[@]}" install -m 0644 "$temp_dir/hashicorp.repo" /etc/yum.repos.d/hashicorp.repo
-            install_packages python3.14 python3.14-pip awscli-2 gh terraform
-            remove_fallback_links aws aws_completer
-            if "${SUDO[@]}" dnf --releasever=latest info starship >/dev/null 2>&1; then
-                install_packages starship
-                remove_fallback_links starship
-            else
-                install_starship
-            fi
+        Linux:aarch64 | Linux:arm64)
+            MISE_ASSET="linux-arm64"
+            MISE_SHA256="0b26aa92ace34dae2e376c62920473cdb6e857e0b43ae5cc6e59922d7c934301"
             ;;
-        macos)
-            brew tap hashicorp/tap
-            install_packages python@3.14 awscli gh starship hashicorp/tap/terraform
-            remove_fallback_links aws aws_completer starship
+        Darwin:x86_64)
+            MISE_ASSET="macos-x64"
+            MISE_SHA256="4c86f557c17d237784bd259e6842e2a231d7f550afedca522a69da8a5dca1282"
+            ;;
+        Darwin:arm64 | Darwin:aarch64)
+            MISE_ASSET="macos-arm64"
+            MISE_SHA256="4fd6dabcc9a57050e8f2fd1e53fc6b74e82d8cd85ed1751fd172756888aa98bc"
+            ;;
+        *)
+            printf 'Error: unsupported Mise target: %s %s\n' "$os" "$machine" >&2
+            exit 1
             ;;
     esac
-}
-
-remove_fallback_links() {
-    local tool target
-    for tool in "$@"; do
-        case "$tool" in
-            starship) target="$HOME/.local/lib/dotfiles/starship" ;;
-            *) target="$HOME/.local/aws-cli/v2/current/bin/$tool" ;;
-        esac
-        if [[ -L "$HOME/.local/bin/$tool" ]] &&
-            [[ "$(readlink "$HOME/.local/bin/$tool")" == "$target" ]]; then
-            rm -- "$HOME/.local/bin/$tool"
-        fi
-    done
 }
 
 verify_sha256() {
@@ -247,63 +192,24 @@ verify_sha256() {
     fi
 }
 
-install_starship() {
-    local arch checksum temp_dir
-    case "$(uname -m)" in
-        x86_64)
-            arch=x86_64
-            checksum=b7c232b0e8249d8e55a40beb79c5c43a7d370f3f9408bd215deb0170daeaadf3
-            ;;
-        arm64 | aarch64)
-            arch=aarch64
-            checksum=dc30189378d2f2e287384e8a692d3f95ad1df64cf0e8c36aa9201516028aed6b
-            ;;
-    esac
-    temp_dir="$(mktemp -d)"
-    TEMP_PATHS+=("$temp_dir")
-    download --output "$temp_dir/starship.tar.gz" \
-        "https://github.com/starship/starship/releases/download/v${STARSHIP_VERSION}/starship-${arch}-unknown-linux-musl.tar.gz"
-    verify_sha256 "$checksum" "$temp_dir/starship.tar.gz"
-    tar -xzf "$temp_dir/starship.tar.gz" -C "$temp_dir"
-    mkdir -p "$HOME/.local/bin" "$HOME/.local/lib/dotfiles"
-    install -m 0755 "$temp_dir/starship" "$HOME/.local/lib/dotfiles/starship"
-    ln -sfn "$HOME/.local/lib/dotfiles/starship" "$HOME/.local/bin/starship"
-}
-
-install_awscli() {
-    local arch checksum temp_dir
-    case "$(uname -m)" in
-        x86_64)
-            arch=x86_64
-            checksum=0f02381483b0a5ca127a4cb379e656a73007b346561a5e41d3249d3bc1861226
-            ;;
-        arm64 | aarch64)
-            arch=aarch64
-            checksum=a10b80249b10c8fe9d433a42ee90d34c60cf50089b7e65d45c8d75e782c921ec
-            ;;
-    esac
-    temp_dir="$(mktemp -d)"
-    TEMP_PATHS+=("$temp_dir")
-    download --output "$temp_dir/awscli.zip" \
-        "https://awscli.amazonaws.com/awscli-exe-linux-${arch}-${AWSCLI_VERSION}.zip"
-    verify_sha256 "$checksum" "$temp_dir/awscli.zip"
-    unzip -q "$temp_dir/awscli.zip" -d "$temp_dir"
-    "$temp_dir/aws/install" --install-dir "$HOME/.local/aws-cli" --bin-dir "$HOME/.local/bin" --update
-}
-
-configure_python() {
-    local python
-    if [[ "$OS_ID" == "macos" ]]; then
-        python="$(brew --prefix python@3.14)/bin/python3.14"
-    else
-        python=/usr/bin/python3.14
+install_mise() {
+    if [[ -x "$HOME/.local/bin/mise" ]] &&
+        [[ "$("$HOME/.local/bin/mise" --version | awk '{print $1}')" == "$MISE_VERSION" ]]; then
+        return
     fi
-    "$python" -c 'import sys; assert sys.version_info[:2] == (3, 14)'
+
+    local archive temp_dir url
+    mise_target
+    temp_dir="$(mktemp -d)"
+    TEMP_PATHS+=("$temp_dir")
+    archive="$temp_dir/mise.tar.xz"
+    url="https://github.com/jdx/mise/releases/download/v${MISE_VERSION}/mise-v${MISE_VERSION}-${MISE_ASSET}.tar.xz"
+
+    download --output "$archive" "$url"
+    verify_sha256 "$MISE_SHA256" "$archive"
+    tar -xJf "$archive" -C "$temp_dir"
     mkdir -p "$HOME/.local/bin"
-    # Keep the OS interpreter intact; development commands use one native install.
-    ln -sfn "$python" "$HOME/.local/bin/python"
-    ln -sfn "$python" "$HOME/.local/bin/python3"
-    ln -sfn "$python" "$HOME/.local/bin/python3.14"
+    install -m 0755 "$(find "$temp_dir" -type f -name mise -print -quit)" "$HOME/.local/bin/mise"
 }
 
 install_git_checkout() {
@@ -322,22 +228,6 @@ install_git_checkout() {
     fi
     git -C "$checkout_dir" fetch --depth 1 origin "$commit"
     git -C "$checkout_dir" checkout --detach "$commit"
-}
-
-install_node() {
-    local node_version
-    node_version="$(<"$REPO_DIR/.nvmrc")"
-    install_git_checkout "$NVM_DIR" https://github.com/nvm-sh/nvm.git "$NVM_COMMIT" nvm.sh
-    # nvm is sourced shell code and does not support nounset.
-    set +u
-    # shellcheck source=/dev/null
-    source "$NVM_DIR/nvm.sh" --no-use
-    nvm install "$node_version"
-    nvm alias default "$node_version"
-    nvm use default
-    npm install --global "corepack@$COREPACK_VERSION"
-    corepack enable
-    set -u
 }
 
 wait_for_jobs() {
@@ -364,6 +254,10 @@ finish_jobs() {
     PIDS=()
 }
 
+install_mise_tools() {
+    "$HOME/.local/bin/mise" install --yes
+}
+
 install_plugins() {
     local plugin_root="$HOME/.local/share/zsh/plugins"
     local package_root="$HOME/.vim/pack/dotfiles/start"
@@ -384,6 +278,7 @@ install_config() {
     local destination source
     mkdir -p "$HOME/.config"
     while IFS='|' read -r source destination; do
+        mkdir -p "$(dirname -- "$destination")"
         if [[ -e "$destination" ]] && ! cmp -s "$source" "$destination"; then
             cp -a "$destination" "${destination}.backup-${BACKUP_SUFFIX}"
             printf 'Backed up %s\n' "$destination"
@@ -391,6 +286,8 @@ install_config() {
         install -m 0644 "$source" "$destination"
     done <<EOF
 $REPO_DIR/starship.toml|$HOME/.config/starship.toml
+$REPO_DIR/config/mise/config.toml|$HOME/.config/mise/config.toml
+$REPO_DIR/config/topgrade.toml|$HOME/.config/topgrade.toml
 $REPO_DIR/.zshrc|$HOME/.zshrc
 $REPO_DIR/.vimrc|$HOME/.vimrc
 $REPO_DIR/.tmux.conf|$HOME/.tmux.conf
@@ -403,12 +300,10 @@ install_system_packages
 if [[ "$DRY_RUN" == "1" ]]; then
     exit 0
 fi
-if [[ "$OS_ID" != "macos" ]]; then
-    ensure_sudo
-fi
-install_native_tools
-configure_python
-install_node
+
+install_mise
 install_plugins
 install_config
+install_mise_tools
+
 printf 'Dotfiles installed. Start zsh or run: chsh -s %q\n' "$(command -v zsh)"

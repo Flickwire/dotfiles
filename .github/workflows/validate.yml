@@ -62,7 +62,22 @@ jobs:
       - name: Validate installed configuration
         run: |
           set -euo pipefail
-          bash scripts/validate-install.sh
+          export PATH="$HOME/.local/bin:$PATH"
+          eval "$(mise activate bash)"
+          test "$(mise --version | awk '{print $1}')" = "2026.11.1"
+          mise doctor
+          test "$(node --version)" = "v18.20.8"
+          command -v uv aws gh starship terraform
+          mkdir -p /tmp/mise-nvmrc
+          printf '20\n' >/tmp/mise-nvmrc/.nvmrc
+          test "$(cd /tmp/mise-nvmrc && node --version)" = "v20.20.2"
+          test -f "$HOME/.vim/pack/dotfiles/start/vim-airline/plugin/airline.vim"
+          test -f "$HOME/.vim/pack/dotfiles/start/vim-terraform/ftdetect/hcl.vim"
+          vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if !exists(":AirlineToggle") | cquit | endif' -c 'qa!'
+          touch /tmp/main.tf
+          vim -Nu "$HOME/.vimrc" -i NONE -es /tmp/main.tf -c 'if &filetype !=# "terraform" | cquit | endif' -c 'qa!'
+          STARSHIP_CONFIG="$HOME/.config/starship.toml" starship prompt --path "$PWD" >/dev/null
+          zsh -ic exit
 
   amazon-linux-2023:
     runs-on: ubuntu-latest
@@ -99,11 +114,22 @@ jobs:
           test "$(runuser -u ssm-user -- env HOME=/home/ssm-user git -C /home/ssm-user/.local/src/dotfiles rev-parse HEAD)" = "$DOTFILES_REF"
           runuser -u ssm-user -- env \
             HOME=/home/ssm-user \
-            PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            PATH=/home/ssm-user/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
             bash -s <<'USER_EOF'
           set -euo pipefail
           test "$(sudo -n id -u)" = 0
-          cd "$HOME/.local/src/dotfiles"
-          bash scripts/validate-install.sh
+          eval "$(mise activate bash)"
+          test "$(mise --version | awk '{print $1}')" = "2026.11.1"
+          mise doctor
+          test "$(node --version)" = "v18.20.8"
+          command -v uv aws gh starship terraform
+          mkdir -p /tmp/mise-nvmrc
+          printf '20\n' >/tmp/mise-nvmrc/.nvmrc
+          test "$(cd /tmp/mise-nvmrc && node --version)" = "v20.20.2"
+          vim -Nu "$HOME/.vimrc" -i NONE -es -c 'if !exists(":AirlineToggle") | cquit | endif' -c 'qa!'
+          touch /tmp/main.tf
+          vim -Nu "$HOME/.vimrc" -i NONE -es /tmp/main.tf -c 'if &filetype !=# "terraform" | cquit | endif' -c 'qa!'
+          STARSHIP_CONFIG="$HOME/.config/starship.toml" starship prompt --path /tmp >/dev/null
+          zsh -ic exit
           USER_EOF
           EOF

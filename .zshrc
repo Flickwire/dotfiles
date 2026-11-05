@@ -14,13 +14,15 @@ if [[ -x /opt/homebrew/bin/brew ]]; then
 elif [[ -x /usr/local/bin/brew ]]; then
     eval "$(/usr/local/bin/brew shellenv)"
 fi
-path=("$HOME/.local/bin" "$PNPM_HOME" $path)
+path=(
+    "$HOME/.local/bin"
+    "$PNPM_HOME/bin"
+    $path
+)
 typeset -U path PATH
 
+eval "$(mise activate zsh)"
 autoload -Uz compinit && compinit
-
-export NVM_DIR="$HOME/.nvm"
-[[ -s "$NVM_DIR/nvm.sh" ]] && source "$NVM_DIR/nvm.sh"
 
 if command -v starship >/dev/null; then
     eval "$(starship init zsh)"
