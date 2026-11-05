@@ -109,7 +109,7 @@ install_packages() {
 install_system_packages() {
     local command_name
     local needs_install=0
-    local required=(curl git gpg groff htop less tar tmux unzip vim xz zsh)
+    local required=(curl find git gpg groff htop less tar tmux unzip vim xz zsh)
 
     if [[ "$DRY_RUN" == "1" ]]; then
         needs_install=1
@@ -137,11 +137,11 @@ install_system_packages() {
         ubuntu)
             ensure_sudo
             run "${SUDO[@]}" apt-get update
-            install_packages ca-certificates curl git gnupg groff-base htop less libatomic1 tar tmux unzip vim xz-utils zsh software-properties-common
+            install_packages ca-certificates curl findutils git gnupg groff-base htop less libatomic1 tar tmux unzip vim xz-utils zsh software-properties-common
             ;;
         amzn)
             ensure_sudo
-            install_packages ca-certificates curl git gnupg2 groff-base htop less libatomic tar tmux unzip vim-enhanced xz zsh
+            install_packages ca-certificates curl findutils git gnupg2 groff-base htop less libatomic tar tmux unzip vim-enhanced xz zsh
             ;;
         macos)
             if [[ "$DRY_RUN" != "1" ]] && ! command -v brew >/dev/null; then
@@ -149,7 +149,7 @@ install_system_packages() {
                 exit 1
             fi
             run brew update
-            install_packages ca-certificates curl git gnupg groff htop less tmux unzip vim xz zsh
+            install_packages ca-certificates curl findutils git gnupg groff htop less tmux unzip vim xz zsh
             ;;
     esac
 }
@@ -185,7 +185,7 @@ mise_target() {
 
 verify_sha256() {
     local expected="$1" file="$2"
-    if command -v sha256sum >/dev/null; then
+    if [[ "$(uname -s)" != "Darwin" ]] && command -v sha256sum >/dev/null; then
         printf '%s  %s\n' "$expected" "$file" | sha256sum --check --status
     else
         printf '%s  %s\n' "$expected" "$file" | shasum -a 256 --check --status
